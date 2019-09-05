@@ -232,7 +232,8 @@ program Estimate, eclass
             exit 498
         }
         qui levelsof ``v'' if `touse', local(`v'_levels)
-        local `v'_k = r(r)
+        //local `v'_k = r(r)
+        local `v'_k: list sizeof `v'_levels
     }
     
     // over(): set up container for group sizes, determine reference for decomp
@@ -896,11 +897,11 @@ program Compute_V
         qui mean `m' if `touse' `wgt', `vce'
         exit
     }
-    /*// over() without total or decomposition
-    if `iref'>=. & "`total'"=="" {
-        qui mean `m' if `touse' `wgt', over(`over') `vce'
-        exit
-    }*/
+    // // over() without total or decomposition
+    // if `iref'>=. & "`total'"=="" {
+    //     qui mean `m' if `touse' `wgt', over(`over') `vce'
+    //     exit
+    // }
     // get group sizes (sum of weights)
     local k: list sizeof levels
     if inlist("`weight'", "", "fweight") {
