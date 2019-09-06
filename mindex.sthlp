@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.0  04sep2019  Ben Jann & Simon Seiler}{...}
+{* *! version 1.0.0  06sep2019  Ben Jann & Simon Seiler}{...}
 {vieweralsosee "[R] mlogit" "help mlogit"}{...}
 {viewerjumpto "Basic syntax" "mindex##syntax"}{...}
 {viewerjumpto "Advanced syntax" "mindex##asyntax"}{...}
@@ -208,7 +208,8 @@
     differences in the association pattern (internal structure) and a
     component due to differences in the marginal structure. {cmd:decompose}
     requires {cmd:over()} and is only supported if {cmd:cmd()} is
-    {helpb mlogit}. {cmd:decompose} implies {cmd:contrast}.
+    {helpb mlogit} and if {cmd:controls()} is empty. {cmd:decompose} 
+    implies {cmd:contrast}.
 
 {phang}
     {opt split} subdivides the marginal structure component of the decomposition

@@ -1,4 +1,4 @@
-*! version 1.0.0  04sep2019  Ben Jann & Simon Seiler
+*! version 1.0.1  06sep2019  Ben Jann & Simon Seiler
 
 program mindex, eclass
     version 11
@@ -89,6 +89,10 @@ program Estimate, eclass
             if "`over'"==""{
                 di as err "{bf:decompose} requires {bf:over()}"
                 exit 198
+            }
+            if `"`controls'"'!="" {
+                di as err "{bf:decompose} not supported with {bf:controls()}"
+                exit 498
             }
             if `"`cmd'"'!="mlogit" {
                 di as err "{bf:decompose} only supported for {bf:mlogit}"
@@ -232,7 +236,6 @@ program Estimate, eclass
             exit 498
         }
         qui levelsof ``v'' if `touse', local(`v'_levels)
-        //local `v'_k = r(r)
         local `v'_k: list sizeof `v'_levels
     }
     
