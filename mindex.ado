@@ -1,4 +1,4 @@
-*! version 1.0.1  06sep2019  Ben Jann & Simon Seiler
+*! version 1.0.2  20sep2019  Ben Jann & Simon Seiler
 
 program mindex, eclass
     version 11
@@ -8,6 +8,11 @@ program mindex, eclass
         exit
     }
     local version : di "version " string(_caller()) ":"
+    `version' Check_vceprefix_fw `0'
+    if "`exit'" != "" {
+        ereturn local cmdline `"mindex `0'"'
+        exit
+    }
     Check_vceprefix `0'
     `version' _vce_parserun mindex, noeqlist : `00'
     if "`s(exit)'" != "" {
@@ -19,6 +24,31 @@ program mindex, eclass
         describe `e(generate)'
     }
     ereturn local cmdline `"mindex `0'"'
+end
+
+program Check_vceprefix_fw, eclass
+    version 11
+    syntax anything(id="varlist") [if] [in] [fw iw pw aw] [, vce(str) ///
+        Generate Generate2(passthru) * ]
+    if `"`weight'"'!="fweight" exit
+    if `"`vce'"'=="" exit
+    Parse_vceprefix `vce'
+    if "`vceprefix'"=="" exit
+    if "`generate'`generate2'"!="" {
+        di as err "{bf:generate()} not allowed with {bf:vce(`vceprefix')}"
+        exit 198
+    }
+    local N = _N
+    preserve
+    di as txt "(temporarily expanding data for {bf:`vceprefix'})"
+    tempname FW newobs
+    qui gen double `FW' `exp'
+    qui expand `FW', generate(`newobs')
+    local version : di "version " string(_caller()) ":"
+    `version' mindex `anything' `if' `in', vce(`vce') `options'
+    qui keep if `newobs'==0
+    mata: restore_and_promote_esample() // assuming sort order did not change!
+    c_local exit exit
 end
 
 program Check_vceprefix
@@ -45,7 +75,7 @@ end
 program Parse_vceprefix
     gettoken vce : 0, parse(" ,")
     local l = max(4, strlen(`"`vcetype'"')) 
-    if `"`vce'"'==substr("bootstrap", 1, `l') c_local vceprefix "bootstrap"
+    if      `"`vce'"'==substr("bootstrap", 1, `l') c_local vceprefix "bootstrap"
     else if `"`vce'"'==substr("jackknife", 1, `l') c_local vceprefix "jackknife"
     else c_local vceprefix
 end
@@ -945,7 +975,14 @@ program Compute_V
     }
     // contrast, without decomposition
     forv ii=1/`=`k' + ("`total'"!="")' {
-        if `ii'==`iref' continue
+        if `ii'==`iref' {
+            if `iref'<=`k' { // ref is not total
+                tempname IF
+                qui gen double `IF' = 0 if `touse'
+                local IFs `IFs' `IF'
+            }
+            continue
+        }
         tempname IF
         qui gen double `IF' = `IF`ii'' - `IF`iref'' if `touse'
         local IFs `IFs' `IF'
@@ -954,91 +991,8 @@ program Compute_V
         qui mean `IFs' if `touse' `wgt', `vce'
         exit
     }
-    // decomposition
-    /* The deactivated code below would compute SEs based on IFs, but these SEs
-       are not valid; if you wan to run the code, make sure to comment out the 
-       following line and to change M3gen in the main routine so that the 
-       necessary variables are generated. */
-       qui mean `IFs' if `touse' `wgt', `vce'
-    /*
-    // - transform counterfactual M variables to influence functions
-    local MCF a
-    if "`split'"!="" local MCF `MCF' b c
-    foreach mcf of local MCF {
-         local Mcf`mcf': word 1 of `mcf`mcf''
-    }
-    local lref: word `iref' of `levels'
-    local j 0
-    foreach l of local levels {
-        local ++j
-        if `j'==`iref' continue
-        foreach mcf of local MCF {
-            local ++i
-            tempname IF`mcf'`j'
-            qui gen double `IF`mcf'`j'' = cond(`over'==`l', ///
-                (`Mcf`mcf''-`b'[1,`i']) * (`W'/`_W'[`j',1]), 0) if `touse'
-            local ++i
-            gettoken IF`mcf'r`j' mcf`mcf'r : mcf`mcf'r
-            if `iref'>`k' { // reference is total
-                qui replace `IF`mcf'r`j'' = (`IF`mcf'r`j''-`b'[1,`i']) if `touse'
-            }
-            else {
-                qui replace `IF`mcf'r`j'' = cond(`over'==`lref', ///
-                    (`IF`mcf'r`j''-`b'[1,`i']) * (`W'/`_W'[`iref',1]), 0) if `touse'
-            }
-        }
-    }
-    // foreach mcf of local MCF {
-    //     drop `Mcf`mcf''   // free some memory
-    // }
-    if "`total'"!="" & `iref'<=`k' {
-        local ++j
-        foreach mcf of local MCF {
-            local ++i
-            local IF`mcf'`j': word 2 of `mcf`mcf''
-            qui replace `IF`mcf'`j'' = (`IF`mcf'`j''-`b'[1,`i']) if `touse'
-            local ++i
-            gettoken IF`mcf'r`j' mcf`mcf'r : mcf`mcf'r
-            qui replace `IF`mcf'r`j'' = cond(`over'==`lref', ///
-                (`IF`mcf'r`j''-`b'[1,`i']) * (`W'/`_W'[`iref',1]), 0) if `touse'
-        }
-    }
-    // - compute influence functions for decomposition components
-    local k = `k' + ("`total'"!="")
-    //   -- internal
-    forv i=1/`k' {
-        if `i'==`iref' continue
-        tempname IF
-        qui gen double `IF' = .5*(`IF`i'' - `IFa`i'' + `IFar`i'' - `IF`iref'') if `touse'
-        local IFs `IFs' `IF'
-    }
-    //   -- marginal
-    forv i=1/`k' {
-        if `i'==`iref' continue
-        tempname IF
-        qui gen double `IF' = .5*(`IF`i'' - `IFar`i'' + `IFa`i'' - `IF`iref'') if `touse'
-        local IFs `IFs' `IF'
-    }
-    if "`split'"!="" {
-        //   -- marginal Y
-        forv i=1/`k' {
-            if `i'==`iref' continue
-            tempname IF
-            qui gen double `IF' = .25*(`IF`i'' - `IFc`i'' + `IFcr`i'' - `IF`iref'' ///
-                            + `IFbr`i'' - `IFar`i'' + `IFa`i'' - `IFb`i'') if `touse'
-            local IFs `IFs' `IF'
-        }
-        //   -- marginal X
-        forv i=1/`k' {
-            if `i'==`iref' continue
-            tempname IF
-            qui gen double `IF' = .25*(`IF`i'' - `IFbr`i'' + `IFb`i'' - `IF`iref'' ///
-                            + `IFc`i'' - `IFar`i'' + `IFa`i'' - `IFcr`i'') if `touse'
-            local IFs `IFs' `IF'
-        }
-    }
+    // decomposition: do not compute IFs because the SEs would not be valid
     qui mean `IFs' if `touse' `wgt', `vce'
-    */
 end
 
 program Display
@@ -1067,6 +1021,19 @@ end
 version 11
 mata:
 mata set matastrict on
+
+void restore_and_promote_esample()
+{
+    string scalar  touse
+    real colvector esample
+    
+    touse = st_tempname()
+    stata("qui gen byte "+touse+" = e(sample)")
+    esample = st_data(., touse)
+    stata("restore")
+    st_store(., st_addvar("byte", touse), esample)
+    stata("ereturn repost, esample("+touse+")")
+}
 
 void CopyProb(real scalar twoway)
 {
@@ -1240,8 +1207,14 @@ void Fillin_b(string scalar bnm, real rowvector bvec, string scalar over,
         return
     }
     cstripe = (J(k, 1, "Level"), coefs)
-    coefs = select(coefs, (1::k):!=r)
-    l = k - 1
+    if (r<k) {
+        l = k
+        // coefs[r] = levels[r] + "o." + over
+    }
+    else {
+        l = k - 1
+        coefs = coefs[|1\l|]
+    }
     cstripe = cstripe \ (J(l, 1, "Contrast"), coefs)
     if (decomp) { // decomposition
         cstripe = cstripe \ ((J(l, 1, "Internal") \ J(l, 1, "Marginal")),
@@ -1255,7 +1228,10 @@ void Fillin_b(string scalar bnm, real rowvector bvec, string scalar over,
     b[|1\k|] = bvec[|1\k|]
     jj = k
     for (i=1; i<=k; i++) {
-        if (i==r) continue
+        if (i==r) {
+            if (i<k) jj++ // ref is not total
+            continue
+        }
         b[++jj] = bvec[i] - bvec[r]
     }
     if (decomp==0) {
@@ -1265,6 +1241,10 @@ void Fillin_b(string scalar bnm, real rowvector bvec, string scalar over,
     }
     j = k
     for (i=1; i<=k; i++) {
+        if (i==r) {
+            if (i<k) jj++ // ref is not total
+            continue
+        }
         if (i==r) continue // r is reference group
         c1  = ++j // i with internal structure of r
         c1r = ++j // r with internal structure of i
