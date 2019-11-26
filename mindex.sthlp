@@ -1,22 +1,26 @@
 {smcl}
 {* *! version 1.0.0  06sep2019  Ben Jann & Simon Seiler}{...}
 {vieweralsosee "[R] mlogit" "help mlogit"}{...}
-{viewerjumpto "Basic syntax" "mindex##syntax"}{...}
-{viewerjumpto "Advanced syntax" "mindex##asyntax"}{...}
-{viewerjumpto "Description" "mindex##description"}{...}
-{viewerjumpto "Options (basic syntax)" "mindex##basicoptions"}{...}
-{viewerjumpto "Options (advanced syntax)" "mindex##advoptions"}{...}
-{viewerjumpto "Examples" "mindex##examples"}{...}
-{viewerjumpto "Methods and formulas" "mindex##methods"}{...}
-{viewerjumpto "Saved results" "mindex##saved_results"}{...}
-{viewerjumpto "References" "mindex##references"}{...}
-{viewerjumpto "Authors" "mindex##authors"}{...}
 {hi:help mindex}
 {hline}
 
 {title:Title}
 
 {pstd}{hi:mindex} {hline 2}  M-Index analysis
+
+
+{title:Contents}
+
+    {help mindex##syntax:Basic syntax}
+    {help mindex##asyntax:Advanced syntax}
+    {help mindex##description:Description}
+    {help mindex##basicoptions:Basic syntax options}
+    {help mindex##advoptions:Advanced syntax options}
+    {help mindex##examples:Examples}
+    {help mindex##methods:Methods and formulas}
+    {help mindex##saved_results:Saved results}
+    {help mindex##references:References}
+    {help mindex##authors:Authors}
 
 
 {marker syntax}{...}
@@ -31,11 +35,11 @@
 {syntab :Main}
 {synopt :{opth over(varname)}}compute results by subpopulations
     {p_end}
-{synopt :{opt t:otal}}include total across subpopulations
+{synopt :{opt t:otal}[{cmd:(}{it:{help mindex##total:type}}{cmd:)}]}include total across subpopulations
     {p_end}
 {synopt :{opt contrast}}report differences between subpopulations
     {p_end}
-{synopt :{opt dec:ompose}}decompose differences between subpopulations
+{synopt :{opt dec:ompose}[{cmd:(}{opt s:plit}{cmd:)}]}decompose differences between subpopulations
     {p_end}
 {synopt :{opt split}}subdivide margins decomposition component
     {p_end}
@@ -73,7 +77,7 @@
 {syntab :Technical}
 {synopt :{opt cmd(command)}}command to be used for the outcome models; default is {helpb mlogit}
     {p_end}
-{synopt :[{cmd:no}]{opt coll:apse}}enforce/prevent internal data collapsing
+{synopt :{opt coll:apse}}internally collapse data to improve speed
     {p_end}
 {synopt :{opt force}}enforce outcome model estimation even if tabulation is feasible
     {p_end}
@@ -104,13 +108,13 @@
 {pstd}
     and {it:model} is
 
-        {cmdab:f:ull}     full-information outcome model
-        {cmdab:r:educed}  reduced-information outcome model
-        {cmdab:m:index}   model analyzing the M-index
+        {cmdab:e:xtended}   extended-information outcome model
+        {cmdab:r:educed}    reduced-information outcome model
+        {cmdab:m:index}     model analyzing the M-index
 
 {pstd}
     If {it:model} is omitted, the models are assumed to be specified in the
-    order a listed above. Each model can only be specified once. {cmd:cmd()}
+    order as listed above. Each model can only be specified once. {cmd:cmd()}
     selects the command to be used for estimation; the default is
     {helpb mlogit} for the outcome models and {helpb regress} for the M-index
     model. {it:opts} are any options allowed by the estimation
@@ -121,11 +125,11 @@
 {col 5}{help mindex##advoptions:{it:options}}{col 29}Description
 {synoptline}
 {syntab :SE/Robust}
-{synopt :{opth vce(vcetype)}}{it:vcetype} may be {opt boot:strap} or
-   {opt jack:knife}, or any {it:vcetype} allowed by the
-   command used to analyze the M-index, e.g. {opt r:obust} or
-   {opt cl:uster} {it:clustvar}
-   {p_end}
+{synopt :{opth vce(vcetype)}}{it:vcetype} may be {opt gmm} [{it:clustvar}],
+    {opt boot:strap}, {opt jack:knife}, or any {it:vcetype} allowed by the
+    command used to analyze the M-index, e.g. {opt r:obust} or
+    {opt cl:uster} {it:clustvar}
+    {p_end}
 {synopt :{opt robust}}synonym for {cmd:vce(robust)}
     {p_end}
 {synopt :{opt cl:uster(clustvar)}}synonym for {cmd:vce(cluster} {it:clustvar}{cmd:)}
@@ -151,11 +155,7 @@
 {syntab :Technical}
 {synopt :{opt coll:apse}}internally collapse data to improve speed
     {p_end}
-{synopt :{opt force}}enforce outcome model estimation even if tabulation is feasible
-    {p_end}
-{synopt :{opt noi:sily}}display output from outcome models
-    {p_end}
-{synopt :{it:mopts}}options to be passed through to the model analyzing the M-index
+{synopt :{opt noi:sily}}display output from all models
     {p_end}
 {synoptline}
 {p 4 6 2}{cmd:fweight}s, {cmd:aweight}s, {cmd:iweight}s, and {cmd:pweight}s are allowed; see help {help weight}.{p_end}
@@ -193,9 +193,18 @@
     {opth over(varname)} estimates the M-index for the subpopulations defined by
     the values of {it:varname}.
 
+{marker total}{...}
 {phang}
-    {opt total} reports the M-index of the total population in addition to the
-    the individual subpopulations. {cmd:total} requires {cmd:over()}.
+    {opt total}[{cmd:(}{it:type}{cmd:)}] reports the M-index of the total
+    population in addition to the the individual subpopulations. {cmd:total()}
+    requires {cmd:over()}. {it:type} specifies the type of total statistic to be
+    reported; it may be one of the following.
+
+{p2colset 13 24 26 2}{...}
+{p2col:{opt p:ooled}}raw M-index of the pooled sample across all subpopulations; this is the default{p_end}
+{p2col:{opt w:ithin}}M-index of the pooled sample controlling for subpopulation membership{p_end}
+{p2col:{opt a:verage}}observation-weighted average M-index across subpopulations{p_end}
+{p2col:{opt b:alanced}}as-balanced average M-index across subpopulations{p_end}
 
 {phang}
     {opt contrast} computes differences in the M-index between subpopulations.
@@ -204,18 +213,17 @@
     requires {cmd:over()}.
 
 {phang}
-    {opt decompose} decomposes the M-index contrasts into a component due to
+    {opt decompose} decomposes each M-index contrast into a component due to
     differences in the association pattern (internal structure) and a
-    component due to differences in the marginal structure. {cmd:decompose}
-    requires {cmd:over()} and is only supported if {cmd:cmd()} is
-    {helpb mlogit} and if {cmd:controls()} is empty. {cmd:decompose} 
-    implies {cmd:contrast}.
-
-{phang}
-    {opt split} subdivides the marginal structure component of the decomposition
+    component due to differences in the marginal structure. To further 
+    subdivide the marginal structure component
     into a part due to differences in the distribution of the dependent variable and
-    a part due to differences in the distribution of the predictors. {cmd:split}
-    implies {cmd:decompose}.
+    a part due to differences in the distribution of the predictors, type
+    {cmd:decompose(split)}. {cmd:decompose} requires {cmd:over()} and implies 
+    {cmd:contrast}. Options {cmd:total(average)},
+    {cmd:total(balance)}, {cmd:controls()}, and {cmd:cmd()} are not supported 
+    together with {cmd:decompose}. By default, no standard errors are reported for the 
+    decomposition components; use the bootstrap to obtain standard errors.
 
 {phang}
     {opt refgroup(refgroup)} selects the reference group for contrasts and
@@ -226,7 +234,7 @@
 
 {phang}
     {opth controls(varlist)} are control variables to be included in both
-    the reduced model and the full model. {it:varlist} may contain factor
+    the reduced model and the extended model. {it:varlist} may contain factor
     variables; see {help fvvarlist}.
 
 {phang}
@@ -236,8 +244,10 @@
 {phang}
     {opt vce(vcetype)} specifies the type of variance estimation to be used
     to determine the standard errors. {it:vcetype} may be
-    {opt analytic}, {opt cl:uster} {it:clustvar}, {opt boot:strap}, or
-    {opt jack:knife}; see {help vce_option:[R] {it:vce_option}}.
+    {opt analytic} (the default), {opt cl:uster} {it:clustvar}, {opt boot:strap}, or
+    {opt jack:knife}; see {help vce_option:[R] {it:vce_option}}. No standard errors
+    are reported for decomposition results if {it:vcetype} is {cmd:analytic} 
+    or {cmd:cluster}.
 
 {phang}
     {opt cluster(clustvar)} is a synonym for {cmd:vce(cluster} {it:clustvar}{cmd:)}.
@@ -269,21 +279,15 @@
 
 {phang}
     {opt cmd(command)} selects the command to be used to estimate the reduced model
-    and the full model. The default command is {helpb mlogit}.
+    and the extended model. The default command is {helpb mlogit}.
 
 {phang}
     {opt collapse} internally collapses the data to a dataset of frequencies and
     runs all computations on such a compressed dataset. {opt collapse}
-    has no effect on the results. Use this option to speedup computations
+    has no effect on the results. Use this option to speed up computations
     if the data structure is simple (e.g. if all variables are
     categorical with only few levels). {opt collapse} is not allowed if
     weights are specified.
-
-{pmore}
-    If {it:indepvars} contains a single categorical variable and
-    {cmd:controls()} is empty, the data will be collapsed automatically (unless
-    {cmd:force} or weights have been specified). Type {cmd:nocollapse} to
-    prevent the automatic collapsing.
 
 {phang}
     {opt force} enforces model estimation even if tabulation is feasible. If
@@ -298,7 +302,7 @@
     {helpb mlogit}.
 
 {phang}
-    {opt noisily} displays the output of the reduced model and the full model. By
+    {opt noisily} displays the output of the reduced model and the extended model. By
     default, these results are not displayed.
 
 
@@ -307,10 +311,28 @@
 
 {phang}
     {opt vce(vcetype)} specifies the type of variance estimation to be used
-    to determine the standard errors. {it:vcetype} may be {opt boot:strap} or
-    {opt jack:knife} or any {it:vcetype} allowed by the
-    command used to analyze the M-index. Examples are {opt r:obust} or
-    {opt cl:uster} {it:clustvar}. Also see {help vce_option:[R] {it:vce_option}}.
+    to determine the standard errors. {it:vcetype} may be:
+
+{p2colset 13 33 35 2}{...}
+{p2col:{opt gmm} [{it:clustvar}]}use {helpb gmm} for variance estimation{p_end}
+{p2col:{opt boot:strap} [{cmd:,} ...]}bootstrap variance estimation; see {help vce_option:[R] {it:vce_option}}{p_end}
+{p2col:{opt jack:knife} [{cmd:,} ...]}jackknife variance estimation; see {help vce_option:[R] {it:vce_option}}{p_end}
+{p2col:{it:other}}any other {it:vcetype} allowed by the
+    command used for the M-index model; examples are {opt r:obust} or
+    {opt cl:uster} {it:clustvar}{p_end}
+
+{pmore}
+    By default, standard errors as returned by the command used for estimating the 
+    M-index model are reported. These standard errors may be biased because they
+    ignore the multi-stage nature of the estimation procedure. To obtain consistent 
+    standard errors, apply {cmd:vce(gmm)} or {cmd:vce(bootstrap)}. In the former case,
+    the outcome models and the M-index model will be expressed as a system of
+    moment equations and the standard errors will be estimated by a call to 
+    {helpb gmm} (without iterating). To obtain cluster-robust GMM standard errors, type 
+    {cmd:vce(gmm} {it:clustvar}{cmd:)} or specify {cmd:cluster(}{it:clustvar}{cmd:)}
+    together with {cmd:vce(gmm)}. {cmd:vce(gmm)} is only allowed if 
+    {helpb mlogit} is used for the outcome models and {helpb regress} is used for the
+    M-index model (the default).
 
 {phang}
     {opt robust} is a synonym for {cmd:vce(robust)}.
@@ -351,29 +373,16 @@
     weights are specified.
 
 {phang}
-    {opt force} enforces model estimation even if tabulation is feasible. If
-    the reduced model is empty, base probabilities can be obtained from a
-    one-way table of {it:depvar} without estimating the reduced model.
-    Likewise, if the full model only contains a single categorical variable,
-    conditional probabilities can be obtained from a two-way table. To save
-    computer time, {cmd:mindex} automatically detects these situations and
-    switches to tabulation whenever feasible. Apply option {cmd:force} to
-    deactivate this behavior. In any case, tabulation will only be considered
-    as an alternative to model estimation if the command for the outcome models
-    is {helpb mlogit}.
-
-{phang}
-    {opt noisily} displays the output of the reduced model and the full
-    model. By default, these models are not displayed.
-
-{phang}
-    {it:mopts} are options to be passed through to the command estimating the
-    model analyzing the M-index. This is an alternative to specifying the options
-    directly within the model equation.
+    {opt noisily} displays the output of the reduced model and the extended model. By
+    default, these results are not displayed. In addition, if {cmd:vce(gmm)} is 
+    specified, {cmd:noisily} displays the (unadjusted) output from the
+    M-index model and the output from the GMM estimation.
 
 
 {marker examples}{...}
 {title:Examples}
+
+{dlgtab:Basic example}
 
 {pstd}
     M-index by country using the {cmd:example2.dta} from Pisati (2000; the original source is
@@ -399,7 +408,9 @@
 {pstd}
     Use explicit declarations if you want specify the equations in a different order:
 
-{p 8 12 2}. {stata "mindex son (m:ibn.country, robust noconstant) (full:i.father i.country i.father#i.country) (reduced:i.country) [fweight=obs]"}
+{p 8 12 2}. {stata "mindex son (m:ibn.country, robust noconstant) (extended:i.father i.country i.father#i.country) (reduced:i.country) [fweight=obs]"}
+
+{dlgtab:Counterfactual decomposition}
 
 {pstd}
     Decomposition of country differences using {cmd:example1.dta} from Pisati (2000):
@@ -408,13 +419,27 @@
         . {stata mindex son i.father [fweight=obs], over(country) decompose}
 
 {pstd}
-    No standard errors are reported for the decomposition components. One approach
+    No standard errors are reported for the decomposition components. An approach
     to obtain the standard errors is to use the bootstrap (since Stata's
     {helpb bootstrap} command does not support {cmd:fweight}s, we
     first have to expand the example data to observation-level data):
 
         . {stata expand obs}
 {p 8 12 2}. {stata mindex son i.father, over(country) decompose vce(boot, reps(100))}{p_end}
+
+{dlgtab:GMM standard errors}
+
+{pstd}
+    Default standard errors can be quite of when decomposing the M-index by 
+    subpopulations. Example:
+
+        . {stata "use http://www.stata.com/stb/stb55/sg142/example1.dta, clear"}
+        . {stata mindex son (i.father) () (i.son) [fweight=obs]}
+
+{pstd}
+    Better standard errors can be obtains in this case by {cmd:vce(gmm)}:
+
+        . {stata mindex son (i.father) () (i.son) [fweight=obs], vce(gmm)}
 
 
 {marker methods}{...}
@@ -424,7 +449,7 @@
 
 {pstd}
     For the basic ideas behind the M-index see Section III in Theil (1970;
-    although the term "M-index" does not appear). For a formal discussion in
+    although the term "M-index" does not appear therein). For a formal discussion in
     the context of segregation research see Theil/Finizza (1971) and
     Mora/Ruiz-Castillo (2009, 2011). For a formal discussion in the context of
     social mobility research see Silber/Spadaro (2011).
@@ -444,10 +469,10 @@
         {it:m}_i = ln(Pr1_i / Pr0_i)
 
 {pstd}
-    where Pr1_i is an estimate under full-information (i.e. including the
+    where Pr1_i is an estimate of the probability that the dependent variable takes on
+    its observed value for observation i under extended information (i.e., including the
     predictors we are interested in, say parents' social class in case of
-    mobility research) of the probability that the dependent variable takes on
-    its observed value for observation i, and Pr0_i is the estimate under
+    mobility research), and Pr0_i is the estimate under
     restricted information (e.g. excluding parents' social class). By default,
     {cmd:mindex} uses multinomial logistic regression to estimate Pr1 and
     Pr0, but other models, such as ordered logistic regression, may make sense
@@ -496,12 +521,20 @@
 
 {pstd}
     By default, {cmd:mindex} computes standard errors that assume Pr1 and Pr0
-    to be fixed, not estimated. In our experience, these standard errors are
-    often more or less consistent, despite the simplifying assumption. This
-    finding, however, only applies to levels and contrasts and does not
-    translate to the components of the counterfactual decomposition; this is
-    why we do not report standard errors for the decomposition components. In any
-    case, we suggest using the bootstrap to obtain reliable standard errors.
+    to be fixed, not estimated. In our experience, for the types of analyses
+    supported by basic syntax, these standard errors are often more or less
+    consistent, despite the simplifying assumption. This finding, however, only
+    applies to levels and contrasts and does not translate to the components of
+    the counterfactual decomposition; this is why we do not report standard
+    errors for the decomposition components. We suggest using the bootstrap to
+    obtain reliable standard errors in this case, i.e., apply {cmd:vce(boostrap)}.
+
+{pstd}
+    Furthermore, the default standard errors might not be valid for analyses 
+    obtained by advanced syntax (e.g., when decomposing the M-index 
+    by levels of the dependent variable). To obtain valid standard errors in these cases
+    apply GMM estimation or the bootstrap. See the {helpb mindex##advoptions:vce()} 
+    option above.
 
 
 {marker saved_results}{...}
@@ -516,11 +549,14 @@
 {synopt:{cmd:e(N_over)}}number of subpopulations (or undefined){p_end}
 {synopt:{cmd:e(N_clust)}}number of clusters (or undefined){p_end}
 {synopt:{cmd:e(irefgroup)}}index of reference subpopulation (or undefined){p_end}
+{synopt:{cmd:e(k_out)}}number of values of outcome variable{p_end}
 
 {p2col 5 20 24 2: Macros}{p_end}
 {synopt:{cmd:e(cmd)}}{cmd:mindex}{p_end}
 {synopt:{cmd:e(cmdline)}}command as typed{p_end}
 {synopt:{cmd:e(depvar)}}name of outcome variable{p_end}
+{synopt:{cmd:e(out)}}values of outcome variable{p_end}
+{synopt:{cmd:e(out_labels)}}value labels of outcome variable (if available){p_end}
 {synopt:{cmd:e(over)}}name of {cmd:over()} variable{p_end}
 {synopt:{cmd:e(over_levels)}}values from {cmd:over()} variable{p_end}
 {synopt:{cmd:e(total)}}{cmd:total} or empty{p_end}
@@ -530,13 +566,11 @@
 {synopt:{cmd:e(refgroup)}}value of reference subpopulation{p_end}
 {synopt:{cmd:e(collapse)}}{cmd:collapse} if data has been collapsed, else empty{p_end}
 {synopt:{cmd:e(force)}}{cmd:force} or empty{p_end}
-{synopt:{cmd:e(fcmd)}}estimation command used for full model{p_end}
-{synopt:{cmd:e(fvars)}}covariates in full model{p_end}
-{synopt:{cmd:e(fopts)}}options applied to full model{p_end}
-{synopt:{cmd:e(ftable)}}{cmd:ftable} if full model table-based, else empty{p_end}
+{synopt:{cmd:e(ecmd)}}estimation command used for extended model{p_end}
+{synopt:{cmd:e(evars)}}covariates in extended model{p_end}
+{synopt:{cmd:e(etable)}}{cmd:etable} if extended model table-based, else empty{p_end}
 {synopt:{cmd:e(rcmd)}}estimation command used for reduced model{p_end}
 {synopt:{cmd:e(rvars)}}covariates in reduced model{p_end}
-{synopt:{cmd:e(ropts)}}options applied to reduced model{p_end}
 {synopt:{cmd:e(rtable)}}{cmd:rtable} if reduced model table-based, else empty{p_end}
 {synopt:{cmd:e(generate)}}name of variable generated by {cmd:generate()}{p_end}
 {synopt:{cmd:e(wtype)}}weight type{p_end}
@@ -557,28 +591,33 @@
 
 {pstd}
     Under advanced syntax {cmd:mindex} passes through all returns from the
-    estimation command used for the M-index model and adds the following
-    macros:
+    estimation command used for the M-index model and adds the following:
 
+{p2col 5 22 26 2: Scalars}{p_end}
+{synopt:{cmd:e(k_out)}}number of values of outcome variable{p_end}
+
+{p2col 5 22 26 2: Macros}{p_end}
 {synopt:{cmd:e(cmd)}}{cmd:mindex}{p_end}
 {synopt:{cmd:e(cmdline)}}command as typed{p_end}
 {synopt:{cmd:e(depvar)}}name of outcome variable{p_end}
+{synopt:{cmd:e(out)}}values of outcome variable{p_end}
+{synopt:{cmd:e(out_labels)}}value labels of outcome variable (if available){p_end}
 {synopt:{cmd:e(collapse)}}{cmd:collapse} if data has been collapsed, else empty{p_end}
 {synopt:{cmd:e(force)}}{cmd:force} or empty{p_end}
-{synopt:{cmd:e(fcmd)}}estimation command used for full model{p_end}
-{synopt:{cmd:e(fvars)}}covariates in full model{p_end}
-{synopt:{cmd:e(fopts)}}options applied to full model{p_end}
-{synopt:{cmd:e(ftable)}}{cmd:ftable} if full model table-based, else empty{p_end}
+{synopt:{cmd:e(ecmd)}}estimation command used for extended model{p_end}
+{synopt:{cmd:e(evars)}}covariates in extended model{p_end}
+{synopt:{cmd:e(eopts)}}options applied to extended model{p_end}
 {synopt:{cmd:e(rcmd)}}estimation command used for reduced model{p_end}
 {synopt:{cmd:e(rvars)}}covariates in reduced model{p_end}
 {synopt:{cmd:e(ropts)}}options applied to reduced model{p_end}
-{synopt:{cmd:e(rtable)}}{cmd:rtable} if reduced model table-based, else empty{p_end}
 {synopt:{cmd:e(mcmd)}}estimation command used for the M-index model{p_end}
 {synopt:{cmd:e(mvars)}}covariates in the M-index model{p_end}
 {synopt:{cmd:e(mopts)}}options applied to M-index model{p_end}
 {synopt:{cmd:e(generate)}}name of variable generated by {cmd:generate()}{p_end}
 {synopt:{cmd:e(title)}}{cmd:M-index analysis}{p_end}
 
+{p2col 5 20 24 2: Matrices}{p_end}
+{synopt:{cmd:e(V0)}}unadjusted variance-covariance matrix in case of {cmd:vce(gmm)}{p_end}
 
 {marker references}{...}
 {title:References}

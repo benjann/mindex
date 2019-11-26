@@ -1,0 +1,8 @@
+v 3
+d mindex
+d Author: Ben Jann, University of Bern, jann@soz.unibe.ch
+d
+d Distribution-Date: 26nov2019
+f mindex.sthlp
+f mindex.ado
+f mindex_gmm.ado

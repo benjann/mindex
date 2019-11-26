@@ -1,4 +1,4 @@
-*! version 1.0.2  20sep2019  Ben Jann & Simon Seiler
+*! version 1.0.3  22nov2019  Ben Jann & Simon Seiler
 
 program mindex, eclass
     version 11
@@ -19,7 +19,8 @@ program mindex, eclass
         ereturn local cmdline `"mindex `0'"'
         exit
     }
-    Estimate `0'
+    Estimate `0' // returns diopts
+    Display, `diopts'
     if `"`e(generate)'"'!="" {
         describe `e(generate)'
     }
@@ -81,145 +82,139 @@ program Parse_vceprefix
 end
 
 program Estimate, eclass
-    // syntax
     gettoken depvar 0 : 0, parse(" ,(")
     _fv_check_depvar `depvar'
     gettoken tmp : 0, match(par)
-    local simple = "`par'"!="("
-    if `simple' {
-        local syntax [varlist(numeric fv default=none)] /*
-            */ [if] [in] [fw iw pw aw] [, /*
-            */ over(varname numeric) Total /*
-            */ contrast DECompose split REFgroup(str) /*
-            */ CONTrols(varlist numeric fv) cmd(str) /*
-            */ vce(passthru) CLuster(passthru) /*svy SUBpop(passthru)*/ /*
-            */ NOCOLLapse COLLapse
+    if "`par'"!="(" {
+        Estimate_basic `depvar' `0'
     }
     else {
-        local syntax anything(id="varlist") /*
-            */ [if] [in] [fw iw pw aw] [, /*
-            */ vce(passthru) CLuster(passthru) ROBUST /*svy SUBpop(passthru)*/ /*
-            */ COLLapse
+        Estimate_advanced `depvar' `0'
     }
-    syntax `syntax' /*
-        */ force NOSE /* 
+    c_local diopts `diopts'
+end
+
+program Estimate_basic, eclass
+    // syntax
+    gettoken depvar 0 : 0, parse(" ,(")
+    syntax [varlist(numeric fv default=none)] /*
+        */ [if] [in] [fw iw pw aw] [, /*
+        */ over(varname numeric) Total Total2(str) /*
+        */ contrast DECompose DECompose2(str) REFgroup(str) /*
+        */ CONTrols(varlist numeric fv) cmd(str) /*
+        */ vce(passthru) CLuster(passthru) /*
+        */ COLLapse force NOSE /* 
         */ Generate Generate2(name) Replace /*
         */ NOIsily noHeader * ]
-    if `simple' {
-        local fvars `varlist'
-        local varlist
-        local fvars: list fvars | controls
-        local rvars `controls'
-        if `"`cmd'"'==""   local cmd mlogit
-        if `"`fcmd'"'==""  local fcmd `"`cmd'"'
-        if `"`rcmd'"'==""  local rcmd `"`cmd'"'
-        if "`split'"!="" local decompose decompose
-        if "`decompose'"!="" {
-            local contrast contrast
-            if "`over'"==""{
-                di as err "{bf:decompose} requires {bf:over()}"
-                exit 198
-            }
-            if `"`controls'"'!="" {
-                di as err "{bf:decompose} not supported with {bf:controls()}"
-                exit 498
-            }
-            if `"`cmd'"'!="mlogit" {
-                di as err "{bf:decompose} only supported for {bf:mlogit}"
-                exit 498
-            }
-            ParseRefgroup, ref(`refgroup') `total' // returns iref or lref
+    local evars `varlist'
+    local varlist
+    local evars: list evars | controls
+    local rvars `controls'
+    if `"`cmd'"'==""   local cmd mlogit
+    if `"`ecmd'"'==""  local ecmd `"`cmd'"'
+    if `"`rcmd'"'==""  local rcmd `"`cmd'"'
+    if `"`total2'"'!="" {
+        local total total
+        ParseTotal, `total2'    // replaces total
+    }
+    if "`total'"!="" {
+        if "`over'"==""{
+            di as err "{bf:total()} only allowed with {bf:over()}"
+            exit 198
         }
-        else if "`contrast'"!="" {
-            if "`over'"==""{
-                di as err "{bf:contrast} requires {bf:over()}"
-                exit 198
-            }
-            ParseRefgroup, ref(`refgroup') `total' // returns iref or lref
+        local TOTAL .t
+    }
+    Parse_decompose, `decompose2' // returns split
+    if "`split'"!="" local decompose decompose
+    if "`decompose'"!="" {
+        local contrast contrast
+        if "`over'"==""{
+            di as err "{bf:decompose} requires {bf:over()}"
+            exit 198
         }
-        else local iref .
-        if "`total'"!="" {
-            if "`over'"==""{
-                di as err "{bf:total} only allowed with {bf:over()}"
-                exit 198
-            }
-            local TOTAL .t
+        if `"`controls'"'!="" {
+            di as err "{bf:decompose} not supported with {bf:controls()}"
+            exit 498
         }
-        if "`nose'"!="" {
-            foreach opt in vce cluster {
-                if `"``opt''"'!="" {
-                    di as err "{bf:nose} and {bf:`opt'()} not both allowed"
-                    exit 198
-                }
+        if `"`cmd'"'!="mlogit" {
+            di as err "{bf:decompose} only supported for {bf:mlogit}"
+            exit 498
+        }
+        if inlist("`total'","average","balanced") {
+            di as err "{bf:decompose} not supported with {bf:total(`total')}"
+            exit 498
+        }
+        ParseRefgroup, ref(`refgroup') total(`total') // returns iref or lref
+    }
+    else if "`contrast'"!="" {
+        if "`over'"==""{
+            di as err "{bf:contrast} requires {bf:over()}"
+            exit 198
+        }
+        ParseRefgroup, ref(`refgroup') total(`total') // returns iref or lref
+    }
+    else local iref .
+    if "`nose'"!="" {
+        foreach opt in vce cluster {
+            if `"``opt''"'!="" {
+                di as err "{bf:nose} and {bf:`opt'()} not both allowed"
+                exit 198
             }
         }
     }
-    else {
-        ParseEqs `anything' // returns fvars fcmd fopts rvars rcmd ropts mvars mcmd mopts
-        local iref .
-        if `"`fcmd'"'==""  local fcmd mlogit
-        if `"`rcmd'"'==""  local rcmd mlogit
-        if `"`mcmd'"'==""  local mcmd regress
-    }
-    fvrevar `fvars' `rvars' `mvars', list   // get base names of variables
-    local xvars `"`r(varlist)'"'
+    fvrevar `evars', list   // get base names of variables
+    local xvars `r(varlist)'
+    fvrevar `rvars', list
+    local xvars `xvars' `r(varlist)'
+    fvrevar `mvars', list
+    local xvars `xvars' `r(varlist)'
+    local xvars: list uniq xvars
     if "`generate2'"!="" local generate generate
     if "`generate'"!="" {
         if "`generate2'"=="" local generate2 "_M"
         if "`replace'"=="" confirm new variable `generate2'
     }
     if `"`vce'`cluster'`robust'"'!="" {
-        Parse_vce, `vce' `cluster' `robust' // returns vce and clustvar
+        Parse_vce, `vce' `cluster' `robust' // returns gmm, vce, and clustvar
+        if "`gmm'"!="" {
+            di as err "vce(gmm) not allowed with basic syntax"
+            exit 198
+        }
     }
-    if `simple' _get_diopts diopts, `options'
-    else        _get_diopts diopts options, `options'
-    local diopts `diopts' `header'
+    _get_diopts diopts, `options'
+    c_local diopts `diopts' `header'
     if "`weight'"!="" {
         local wgt "[`weight'`exp']"
     }
-    if "`collapse'"!="" {
-        if "`nocollapse'"!="" {
-            di as err "{bf:collapse} and {bf:nocollapse} not both allowed"
-            exit 198
-        }
-        if `"`wgt'`svy'"'!="" {
-            di as err "{bf:collapse} not allowed with weights" // " or svy"
-            exit 198
-        }
+    if "`collapse'"!="" & `"`wgt'"'!="" {
+        di as err "{bf:collapse} not allowed with weights"
+        exit 198
     }
     
     // determine whether computations can be done on tabular data (much
     // faster than running mlogit)
-    if "`force'"=="" {
+    if "`force'"=="" & "`total'"!="within" {
         local rquick 1
         if `"`rcmd'"'!="mlogit" local rquick 0
         else if `"`rvars'"'!="" local rquick 0
-        else if `"`ropts'"'!="" local rquick 0
-        local fquick `rquick' // fquick requires rquick
-        if `"`fcmd'"'!="mlogit" local fquick 0
-        else if `"`fopts'"'!="" local fquick 0
-        if `fquick' {
-            fvrevar `fvars', list
+        local equick `rquick' // equick requires rquick
+        if `"`ecmd'"'!="mlogit" local equick 0
+        if `equick' {
+            fvrevar `evars', list
             local tmp `"`r(varlist)'"'
-            if `: list sizeof tmp'!=1 local fquick 0
-            if `fquick' {
-                if `"`fvars'"'!=`"i.`tmp'"' local fquick 0
+            if `: list sizeof tmp'!=1 local equick 0
+            if `equick' {
+                if `"`evars'"'!=`"i.`tmp'"' local equick 0
                 else {
-                    local fvars0 `"`fvars'"'
-                    local fvars `"`tmp'"'
+                    local evars0 `"`evars'"'
+                    local evars `"`tmp'"'
                 }
-            }
-        }
-        if `rquick' & `fquick' {
-            if `"`collapse'`nocollapse'`wgt'`svy'"'=="" {
-                // ok to collapse data; specify -nocollapse- to prevent this
-                local collapse collapse
             }
         }
     }
     else {
         local rquick 0
-        local fquick 0
+        local equick 0
     }
     
     // determine whether M variables need to be generated
@@ -227,18 +222,19 @@ program Estimate, eclass
     local Mtotgen 1 // M of total
     local Mcfgen  1 // counterfactual Ms
     if "`nose'"!="" {
-        if `fquick' {
-            if `simple' & "`generate'"=="" local Mgen 0
-            local Mtotgen 0
+        if `equick' {
+            if !inlist("`total'","average","balanced") {
+                if "`generate'"=="" local Mgen 0
+                local Mtotgen 0
+            }
         }
     }
-    if `fquick' local Mcfgen  0
+    if `equick' local Mcfgen  0
     
     // mark sample, count obs
     marksample touse
     local allvars `touse' `depvar' `xvars' `over' `clustvar'
     markout `allvars'
-    if "`svy'"!="" svymarkout `touse'
     _nobs `touse' `wgt'
     local N = r(N)
     
@@ -267,6 +263,15 @@ program Estimate, eclass
         }
         qui levelsof ``v'' if `touse', local(`v'_levels)
         local `v'_k: list sizeof `v'_levels
+    }
+    local out_labels
+    if "`: val lab `depvar''"!="" {
+        forval i = 1/`depvar_k' {
+            local val: word `i' of `depvar_levels'
+            local lbl: lab (`depvar') `val', strict
+            local out_labels `"`out_labels'`"`lbl'"' "'
+        }
+        local out_labels: list clean out_labels
     }
     
     // over(): set up container for group sizes, determine reference for decomp
@@ -300,15 +305,13 @@ program Estimate, eclass
     }
     
     // computation based on tabular data: collect predictor levels
-    if `fquick' {
-        qui levelsof `fvars' if `touse', local(xlevels)
+    if `equick' {
+        qui levelsof `evars' if `touse', local(xlevels)
     }
     
     // compute M
-    if `simple' {
-        tempname bvec
-        mat `bvec' = J(1, `over_k' + ("`total'"!=""), .)
-    }
+    tempname bvec
+    mat `bvec' = J(1, `over_k' + ("`total'"!=""), .)
     if `Mgen' {
         tempvar M
         local Mvar `M'
@@ -320,7 +323,8 @@ program Estimate, eclass
     if "`noisily'"=="" di as txt "Estimating outcome models " _c
     foreach l in `over_levels' `TOTAL' {
         local ++i
-        if `simple' local BOPT bvec(`bvec') bpos(`i')
+        local vspec evars(`evars') rvars(`rvars')
+        local BOPT bvec(`bvec') bpos(`i')
         if `l'<. {
             qui `noisily' di _n as txt "-> `over'==`l'"
             _nobs `touse' if `over'==`l' `wgt' // get group size
@@ -335,9 +339,25 @@ program Estimate, eclass
                     tempvar Mtot
                     local Mvar `Mtot'
                     qui gen double `Mvar' = .
+                    if "`total'"=="average" {
+                        qui replace `Mvar' = `M'
+                        Mean `Mvar' if `touse' `wgt'
+                        mat `bvec'[1,`i'] = r(mean)
+                        continue
+                    }
+                    else if "`total'"=="balanced" {
+                        mat `bvec'[1,`i'] = 0
+                        forv ii = 1/`over_k' {
+                            mat `bvec'[1,`i'] = `bvec'[1,`i'] + `bvec'[1,`ii']
+                        }
+                        mat `bvec'[1,`i'] = `bvec'[1,`i'] / `over_k'
+                        continue
+                    }
                 }
                 else local Mvar
-                if `simple' local BOPT bvec(`bvec') bpos(`i')
+                if "`total'"=="within" {
+                    local vspec evars(`evars' i.`over') rvars(`rvars' i.`over')
+                }
             }
         }
         if "`decompose'"!="" { // hold on to estimated models for decomposition
@@ -347,10 +367,9 @@ program Estimate, eclass
         }
         EstimateM if `touse'`andover' `wgt', mvar(`Mvar') ///
             depvar(`depvar') outcomes(`depvar_levels') ///
-            fcmd(`fcmd') fvars(`fvars') fopts(`fopts') ///
-            rcmd(`rcmd') rvars(`rvars') ropts(`ropts') ///
-            rquick(`rquick') fquick(`fquick') xlevels(`xlevels') ///
-            `BOPT' `noisily' `msave'
+            ecmd(`ecmd') equick(`equick') ///
+            rcmd(`rcmd') rquick(`rquick') ///
+            `vspec' xlevels(`xlevels') `BOPT' `noisily' `msave'
     }
     if "`noisily'"=="" di as txt " done."
     
@@ -365,12 +384,12 @@ program Estimate, eclass
         local m1ref: word `iref' of `models'
         if `iref'<=`over_k' local ifref " & `over'==`lref'"
         else                local ifref
-        if `fquick' {
+        if `equick' {
             tempname p q pref qref
             mata: st_matrix("`pref'", colsum(st_matrix("`m1ref'")))
             mata: st_matrix("`qref'", rowsum(st_matrix("`m1ref'")))
             local QOPTREF q(`qref')
-            local XLEVELS xvar(`fvars') xlevels(`xlevels')
+            local XLEVELS xvar(`evars') xlevels(`xlevels')
         }
         else {
             tempname p pref
@@ -412,7 +431,7 @@ program Estimate, eclass
             local m1: word `i' of `models'
             if `l'<. local andover " & `over'==`l'"
             else     local andover ""
-            if `fquick' {
+            if `equick' {
                 mata: st_matrix("`p'", colsum(st_matrix("`m1'")))
                 mata: st_matrix("`q'", rowsum(st_matrix("`m1'")))
                 local QOPT q(`q')
@@ -437,7 +456,7 @@ program Estimate, eclass
                 else local Mvar
                 local popt: word `j' of `POPT'
                 local mopt: word `j' of `MOPT'
-                CounterfactualM `fquick' if `touse'`andover' `wgt', ///
+                CounterfactualM `equick' if `touse'`andover' `wgt', ///
                     mvar(`Mvar') depvar(`depvar') outcomes(`depvar_levels') ///
                     `XLEVELS' p(``popt'') m(``mopt'') `QOPT' ///
                     bvec(`bvec') bpos(`bpos')
@@ -451,7 +470,7 @@ program Estimate, eclass
                 else local Mvar
                 local popt: word `j' of `POPTr'
                 local mopt: word `j' of `MOPTr'
-                CounterfactualM `fquick' if `touse'`ifref' `wgt', ///
+                CounterfactualM `equick' if `touse'`ifref' `wgt', ///
                     mvar(`Mvar') depvar(`depvar') outcomes(`depvar_levels') ///
                     `XLEVELS' p(``popt'') m(``mopt'') `QOPTREF' ///
                     bvec(`bvec') bpos(`bpos')
@@ -462,44 +481,38 @@ program Estimate, eclass
     }
     
     // results
-    if `simple' {
-        tempname b
-        if "`over'"=="" {
-            mat rename `bvec' `b'
-            mat coln `b' = _cons
-        }
-        else {
-            mata: Fillin_b("`b'", st_matrix("`bvec'"), "`over'", ///
-                tokens(st_local("over_levels")), "`total'"!="", `iref', ///
-                "`decompose'"!="", "`split'"!="")
-        }
-        if "`nose'"=="" {
-            tempname V
-            Compute_V `wgt', touse(`touse') `vce' b(`bvec') over(`over') ///
-                levels(`over_levels') `total' iref(`iref') `decompose'  ///
-                `split' n(`N') nn(`_N') m(`M' `Mtot') ///
-                mcfa(`McfA')   mcfb(`McfB')   mcfc(`McfC') ///
-                mcfar(`McfAr') mcfbr(`McfBr') mcfcr(`McfCr')
-            mat `V' = e(V)
-            if "`decompose'"!="" {
-                /* this is needed because no variances are computed for the 
-                decomposition components */
-                local k = colsof(`b') - colsof(`V')
-                mata: st_matrix(st_local("V"), ///
-                    blockdiag(st_matrix(st_local("V")), J(`k', `k', 0)))
-            }
-            mat coleq `V' = ""
-            mat coln `V' = `: colfullnames `b''
-            mat roweq `V' = ""
-            mat rown `V' = `: colfullnames `b''
-            if "`clustvar'"!="" local N_clust = e(N_clust)
-            local e_vce `"`e(vce)'"'
-            local e_vcetype `"`e(vcetype)'"'
-        }
+    tempname b
+    if "`over'"=="" {
+        mat rename `bvec' `b'
+        mat coln `b' = _cons
     }
     else {
-        local mopts `mopts' `vce' `options'
-        qui `mcmd' `M' `mvars' if `touse' `wgt', `mopts'
+        mata: Fillin_b("`b'", st_matrix("`bvec'"), "`over'", ///
+            tokens(st_local("over_levels")), "`total'"!="", `iref', ///
+            "`decompose'"!="", "`split'"!="")
+    }
+    if "`nose'"=="" {
+        tempname V
+        Compute_V `wgt', touse(`touse') `vce' b(`bvec') over(`over') ///
+            levels(`over_levels') total(`total') iref(`iref') `decompose'  ///
+            `split' n(`N') nn(`_N') m(`M' `Mtot') ///
+            mcfa(`McfA')   mcfb(`McfB')   mcfc(`McfC') ///
+            mcfar(`McfAr') mcfbr(`McfBr') mcfcr(`McfCr')
+        mat `V' = e(V)
+        if "`decompose'"!="" {
+            /* this is needed because no variances are computed for the 
+            decomposition components */
+            local k = colsof(`b') - colsof(`V')
+            mata: st_matrix(st_local("V"), ///
+                blockdiag(st_matrix(st_local("V")), J(`k', `k', 0)))
+        }
+        mat coleq `V' = ""
+        mat coln `V' = `: colfullnames `b''
+        mat roweq `V' = ""
+        mat rown `V' = `: colfullnames `b''
+        if "`clustvar'"!="" local N_clust = e(N_clust)
+        local e_vce `"`e(vce)'"'
+        local e_vcetype `"`e(vcetype)'"'
     }
     
     // undo collapse
@@ -520,39 +533,23 @@ program Estimate, eclass
     }
     
     // returns
-    if `simple' {
-        eret post `b' `V' `wgt', depname(`depvar') obs(`N') esample(`touse')
-    }
-    else if "`collapse'"!="" {
-        ereturn repost, esample(`touse')
-        eret local wtype ""
-        eret local wexp ""
-    }
+    eret post `b' `V' `wgt', depname(`depvar') obs(`N') esample(`touse')
     eret local title "M-index analysis"
-    if `simple' {
-        eret local vcetype `"`e_vcetype'"'
-        eret local vce `"`e_vce'"'
-        if "`clustvar'"!="" {
-            eret scalar N_clust = `N_clust'
-            eret local clustvar "`clustvar'"
-        }
+    eret local vcetype `"`e_vcetype'"'
+    eret local vce `"`e_vce'"'
+    if "`clustvar'"!="" {
+        eret scalar N_clust = `N_clust'
+        eret local clustvar "`clustvar'"
     }
     eret local rtable = cond(`rquick', "rtable", "")
-    eret local ropts `"`ropts'"'
     eret local rvars `"`rvars'"'
     eret local rcmd `"`rcmd'"'
-    eret local ftable = cond(`fquick', "ftable", "")
-    eret local fopts `"`fopts'"'
-    if `fquick' {
-        local fvars `"`fvars0'"'
+    eret local etable = cond(`equick', "etable", "")
+    if `equick' {
+        local evars `"`evars0'"'
     }
-    eret local fvars `"`fvars'"'
-    eret local fcmd `"`fcmd'"'
-    if !`simple' {
-        eret local mopts `"`mopts'"'
-        eret local mvars `"`mvars'"'
-        eret local mcmd `"`mcmd'"'
-    }
+    eret local evars `"`evars'"'
+    eret local ecmd `"`ecmd'"'
     eret local force `"`force'"'
     eret local collapse "`collapse'"
     if "`over'"!="" {
@@ -569,6 +566,9 @@ program Estimate, eclass
         eret scalar N_over = `over_k'
         eret matrix _N = `_N'
     }
+    eret scalar k_out = `depvar_k'
+    eret local out_labels `"`out_labels'"'
+    eret local out "`depvar_levels'"
     eret local depvar "`depvar'"
     eret local cmd "mindex"
     
@@ -581,60 +581,15 @@ program Estimate, eclass
         lab var `generate2' "Local M-index"
         eret local generate "`generate2'"
     }
-    
-    // display
-    Display, `diopts'
 end
 
-program ParseEqs
-    local eqnames full reduced mindex
-    forv i = 1/3 {
-        gettoken eq 0 : 0, match(par)
-        if "`par'"!="(" {
-            di as err `"'`eq'' found where '(' expected"'
-            exit 198
-        }
-        if strpos(`"`eq'"', ":") {  // get "eqname:" if existing
-            gettoken eqnm eq : eq, parse(":")
-            gettoken colon eq : eq, parse(":")
-            local found 0
-            foreach nm of local eqnames {
-                local l = strlen(`"`eqnm'"')
-                if `"`eqnm'"'==substr("`nm'", 1, `l') {
-                    local eqnm "`nm'"
-                    local found 1
-                    continue, break
-                }
-            }
-            if !`found' {
-                di as err `"'`eqnm':' not allowed"'
-                exit 198
-            }
-        }
-        else gettoken eqnm eqname : eqnames
-        local eqnames: list eqnames - eqnm
-        local eqnm = substr("`eqnm'", 1, 1)
-        ParseEq `eq'
-        c_local `eqnm'vars `varlist'
-        c_local `eqnm'cmd  `"`cmd'"'
-        c_local `eqnm'opts `options'
-        if `"`0'"'=="" continue, break
-    }
-    if `"`0'"'!="" {
-        di as err `"'`0'' found where nothing expected"'
-        exit 198
-    }
-end
-
-program ParseEq
-    syntax [varlist(numeric fv default=none)] [, cmd(str) * ]
-    c_local varlist `varlist'
-    c_local cmd `"`cmd'"'
-    c_local options `options'
+program Parse_decompose
+    syntax [, Split ]
+    c_local split `split'
 end
 
 program ParseRefgroup
-    syntax [, ref(str) total ]
+    syntax [, ref(str) total(str) ]
     if `"`ref'"'=="" {
         if "`total'"=="" c_local iref 1
         else             c_local iref 0
@@ -642,7 +597,7 @@ program ParseRefgroup
     }
     if `"`ref'"'=="." {
         if "`total'"=="" {
-            di as err "{bf:refgroup(.)} only allowed with {bf:total}"
+            di as err "{bf:refgroup(.)} only allowed with {bf:total()}"
             exit 198
         }
         c_local iref 0
@@ -668,65 +623,40 @@ program ParseRefgroup
     c_local lref `ref'
 end
 
-program Parse_vce
-    syntax [, vce(str) CLuster(varname) robust ]
-    if `"`vce'"'!="" {
-        if "`cluster'"!="" {
-            di as err "only one of {bf:cluster()} and {bf:vce()} allowed"
-            exit 198
-        }
-        if "`robust'"!="" {
-            di as err "only one of {bf:robust} and {bf:vce()} allowed"
-            exit 198
-        }
-        _parse comma lhs rhs : vce
-        gettoken vcetype args : lhs
-        if `"`vcetype'"'==substr("cluster", 1, max(2, strlen(`"`vcetype'"'))) {
-            capt n confirm numeric variable `args'
-            if _rc {
-                di as err "error in option {bf:vce()}"
-                exit 198
-            }
-            if `: list sizeof args'>1 {
-                di as err "too many variables specified"
-                di as err "error in option {bf:vce()}"
-                exit 198
-            }
-            local cluster `args'
-        }
-        c_local vce vce(`vce')
-        c_local clustvar `cluster'
-        exit
+program ParseTotal
+    local syntax [, Pooled Within Average Balanced ]
+    capt syntax `syntax'
+    if _rc {
+        di as err "{bf:total()}: " _c
+        syntax `syntax'
     }
-    if "`cluster'"!="" {
-        c_local vce vce(cluster `cluster')
-        c_local clustvar `cluster'
-        exit
+    local total `pooled' `within' `average' `balanced'
+    if `:list sizeof total'>1 {
+        di as err "{bf:total()}: only one of {bf:pooled}, {bf:within}, {bf:average}, and {bf:balanced} allowed"
+        exit 198
     }
-    if "`robust'"!="" {
-        c_local vce vce(robust)
-        c_local clustvar ""
-    }
+    if "`total'"=="" local total pooled
+    c_local total "`total'"
 end
 
 program EstimateM
     syntax if [fw iw pw aw], depvar(str) outcomes(str) ///
-        fcmd(str) rcmd(str) fquick(str) rquick(str) [ mvar(str) xlevels(str) ///
-        fvars(str) fopts(str) rvars(str) ropts(str) msave(str) NOIsily ///
+        ecmd(str) rcmd(str) equick(str) rquick(str) [ mvar(str) xlevels(str) ///
+        evars(str) rvars(str) msave(str) NOIsily ///
         bvec(str) bpos(str) ]
     if "`weight'" != "" local wgt "[`weight'`exp']"
     marksample touse
     tempname pr pr0
     // reduced model
-    qui `noisily' di as txt _n "Restricted model"
+    qui `noisily' di as txt _n "Reduced model"
     if `rquick' {
         qui `noisily' di as txt "(no model needed; using observed proportions)"
-        if !`fquick' {
+        if !`equick' {
             GetProb `depvar' if `touse' `wgt', p(`pr0') outcomes(`outcomes') `noisily'
         }
     }
     else {
-        qui `noisily' `rcmd' `depvar' `rvars' if `touse' `wgt', `ropts'
+        qui `noisily' `rcmd' `depvar' `rvars' if `touse' `wgt'
         qui gen `pr0' = .
         foreach o of local outcomes {
             qui predict double `pr' if `touse' & `depvar'==`o', pr outcome(`o') 
@@ -735,25 +665,25 @@ program EstimateM
         }
     }
     if "`noisily'"=="" di as txt "." _c
-    // full model
-    qui `noisily' di as txt _n "Full model"
-    if `fquick' {
+    // extended model
+    qui `noisily' di as txt _n "Extended model"
+    if `equick' {
         qui `noisily' di as txt "(no model needed; using observed proportions)"
-        GetProb `fvars' `depvar' if `touse' `wgt', p(`pr') ///
+        GetProb `evars' `depvar' if `touse' `wgt', p(`pr') ///
             outcomes(`outcomes') xlevels(`xlevels') `noisily'
     }
     else {
-        qui `noisily' `fcmd' `depvar' `fvars' if `touse' `wgt', `fopts'
+        qui `noisily' `ecmd' `depvar' `evars' if `touse' `wgt'
     }
     if "`noisily'"=="" di as txt "." _c
     // compute M
-    if `fquick' { // (implies rquick)
+    if `equick' { // (implies rquick)
         if "`bvec'"!="" {
             mata: GetM(st_matrix("`pr'"))
             mat `bvec'[1,`bpos'] = r(M)
         }
         if "`mvar'"!="" {
-            mata: Fillin_M("`mvar'", "`depvar'", "`fvars'", "`touse'", ///
+            mata: Fillin_M("`mvar'", "`depvar'", "`evars'", "`touse'", ///
                 strtoreal(tokens(st_local("outcomes"))), ///
                 strtoreal(tokens(st_local("xlevels"))), ///
                 st_matrix("`pr'"))
@@ -922,7 +852,7 @@ end
 
 program Compute_V
     syntax [fw iw pw aw], touse(str) b(str) [ vce(passthru) over(str) ///
-        levels(str) total iref(str) decompose split n(str) nn(str) ///
+        levels(str) total(str) iref(str) decompose split n(str) nn(str) ///
         m(str) mcfa(str) mcfb(str) mcfc(str) mcfar(str) mcfbr(str) mcfcr(str) ]
     if "`weight'"!="" local wgt "[`weight'`exp']"
     // no over()
@@ -965,7 +895,16 @@ program Compute_V
     if "`total'"!="" {
         local ++i
         local IF`i': word 2 of `m'
-        qui replace `IF`i'' = (`IF`i''-`b'[1,`i']) if `touse'
+        if "`total'"=="balanced" {
+            local ii 0
+            foreach l of local levels {
+                local ++ii
+                qui replace `IF`i'' = (`Mvar'-`b'[1,`i']) * (`W'/(6*`_W'[`ii',1])) if `over'==`l'
+            }
+        }
+        else {
+            qui replace `IF`i'' = (`IF`i''-`b'[1,`i']) if `touse'
+        }
         local IFs `IFs' `IF`i''
     }
     // over() with total, without decomposition
@@ -995,6 +934,346 @@ program Compute_V
     qui mean `IFs' if `touse' `wgt', `vce'
 end
 
+program Estimate_advanced, eclass
+    // syntax
+    gettoken depvar 0 : 0
+    syntax anything(id="varlist") /*
+        */ [if] [in] [fw iw pw aw] [, /*
+        */ vce(passthru) CLuster(passthru) ROBUST /*
+        */ COLLapse /*
+        */ Generate Generate2(name) Replace /*
+        */ NOIsily noHeader * ]
+    ParseEqs `anything' // returns *vars *cmd *cons *opts where * is e, r, and m
+    local iref .
+    if `"`ecmd'"'==""  local ecmd mlogit
+    if `"`rcmd'"'==""  local rcmd mlogit
+    if `"`mcmd'"'==""  local mcmd regress
+    fvrevar `evars', list   // get base names of variables
+    local xvars `r(varlist)'
+    fvrevar `rvars', list
+    local xvars `xvars' `r(varlist)'
+    fvrevar `mvars', list
+    local xvars `xvars' `r(varlist)'
+    local xvars: list uniq xvars
+    if "`generate2'"!="" local generate generate
+    if "`generate'"!="" {
+        if "`generate2'"=="" local generate2 "_M"
+        if "`replace'"=="" confirm new variable `generate2'
+    }
+    if `"`vce'`cluster'`robust'"'!="" {
+        Parse_vce, `vce' `cluster' `robust' // returns gmm, vce, and clustvar
+        if "`gmm'"!="" {
+            if ((`"`rcmd'"'!="mlogit") + (`"`ecmd'"'!="mlogit") + (`"`mcmd'"'!="regress")) {
+                di as err "{bf:vce(gmm)} only allowed with {bf:mlogit} for the" /* 
+                    */ " reduced-information model and the extended-information" /*
+                    */ " model and {bf:regress} for the M-index model"
+                exit 198
+            }
+            capt n fvrevar `evars' `rvars' `mvars', list
+            if _rc {
+                di as err "{bf:vce(gmm)} requires consistent specification of variables across models"
+                exit 198
+            }
+        }
+    }
+    _get_diopts diopts, `options'
+    c_local diopts `diopts' `header'
+    if "`weight'"!="" {
+        local wgt "[`weight'`exp']"
+    }
+    if "`collapse'"!="" & `"`wgt'"'!="" {
+        di as err "{bf:collapse} not allowed with weights" 
+        exit 198
+    }
+    
+    // mark sample, count obs
+    marksample touse
+    local allvars `touse' `depvar' `xvars' `clustvar'
+    markout `allvars'
+    _nobs `touse' `wgt'
+    local N = r(N)
+    
+    // collapse
+    if "`collapse'"!="" {
+        if "`generate'"=="" local sortindex
+        else {
+            tempvar sortindex
+            qui gen long `sortindex' = _n
+        }
+        preserve
+        tempvar Nobs
+        sort `allvars' `sortindex'
+        qui by `allvars': gen long `Nobs' = _N if _n==1 & `touse'
+        qui keep if `Nobs'<.
+        local wgt "[fweight=`Nobs']"
+    }
+    
+    // collect outcomes
+    capt assert (`depvar'==abs(int(`depvar'))) if `touse'
+    if _rc {
+        di as err "negative or noninteger values not allowed in {it:depvar}"
+        exit 498
+    }
+    qui levelsof `depvar' if `touse', local(outcomes)
+    local nout: list sizeof outcomes
+    local out_labels
+    if "`: val lab `depvar''"!="" {
+        forval i = 1/`nout' {
+            local val: word `i' of `outcomes'
+            local lbl: lab (`depvar') `val', strict
+            local out_labels `"`out_labels'`"`lbl'"' "'
+        }
+        local out_labels: list clean out_labels
+    }
+
+    // compute individual-level M
+    tempvar M pr1 pr0 tmp
+    if "`noisily'"=="" di as txt "Estimating outcome models ..." _c
+    // - reduced model
+    qui `noisily' di as txt _n "Reduced model"
+    qui `noisily' `rcmd' `depvar' `rvars' if `touse' `wgt', `ropts'
+    if "`gmm'"!="" {
+        tempname b0
+        matrix `b0' = e(b)
+        local ibase0 = e(ibaseout)
+    }
+    qui gen double `pr0' = .
+    foreach o of local outcomes {
+        qui predict double `tmp' if `touse' & `depvar'==`o', pr outcome(`o') 
+        qui replace `pr0' = `tmp' if `tmp'<.
+        drop `tmp'
+    }
+    // - extended model
+    qui `noisily' di as txt _n "Extended model"
+    qui `noisily' `ecmd' `depvar' `evars' if `touse' `wgt', `eopts'
+    if "`gmm'"!="" {
+        tempname b1
+        matrix `b1' = e(b)
+        local ibase1 = e(ibaseout)
+    }
+    qui gen double `pr1' = .
+    foreach o of local outcomes {
+        qui predict double `tmp' if `touse' & `depvar'==`o', pr outcome(`o') 
+        qui replace `pr1' = `tmp' if `tmp'<.
+        drop `tmp'
+    }
+    // - compute M
+    qui gen double `M' = cond(`pr1'==0, 0, ln(`pr1')) - ///
+        cond(`pr0'==0, 0, ln(`pr0')) if `touse'
+    drop `pr0' `pr1'
+    if "`noisily'"=="" di as txt " done."
+    
+    // estimate M-index model and obtain standard errors
+    if "`gmm'"=="" {
+        qui `mcmd' `M' `mvars' if `touse' `wgt', `vce' `mopts'
+    }
+    else {
+        qui `noisily' `mcmd' `M' `mvars' if `touse' `wgt', `vce' `mopts'
+        if "`noisily'"=="" di as txt "Estimating GMM standard errors ..." _c
+        qui `noisily' di as txt _n "GMM estimation"
+        tempname b
+        mat `b' = e(b)
+        tempname ecurrent
+        _est hold `ecurrent'
+        mat coleq `b' = "m"
+        mata: relabelandremovebase("`b0'", "p0_", `ibase0')
+        mata: relabelandremovebase("`b1'", "p1_", `ibase1')
+        mat `b' = `b0', `b1', `b'
+        forv i = 1/`nout' {
+            if `i'==`ibase0' continue
+            local eqs0 `eqs0' p0_`i'
+            //local parameters `parameters' {p0_`i':`rvars' `rcons'}
+            foreach v in `rvars' `rcons' {
+                local parameters `parameters' p0_`i':`v'
+            }
+        }
+        forv i = 1/`nout' {
+            if `i'==`ibase1' continue
+            local eqs1 `eqs1' p1_`i'
+            //local parameters `parameters' {p1_`i':`evars' `econs'}
+            foreach v in `evars' `econs' {
+                local parameters `parameters' p1_`i':`v'
+            }
+        }
+        //local parameters {`parameters' m:`mvars' `mcons'}
+        foreach v in `mvars' `mcons' {
+            local parameters `parameters' m:`v'
+        }
+        qui `noisily' gmm mindex_gmm if `touse' `wgt', cmd(mlogit) ///
+            from(`b') iter(0) haslfderiv onestep ///
+            winitial(unadjusted, independent) `vce' ///
+            equations(`eqs0' `eqs1' m) parameters(`parameters') ///
+            instruments(`eqs0':`rvars') instruments(`eqs1':`evars') ///
+            instruments(m:`mvars') depvar(`depvar') nout(`nout') ///
+            out(`outcomes') ibase0(`ibase0') ibase1(`ibase1')
+        tempname V V0
+        mat `V' = e(V)
+        mat `V' = `V'["m:", "m:"]
+        mat coleq `V' = ""
+        mat roweq `V' = ""
+        _est unhold `ecurrent'
+        mat `V0' = e(V)
+        ereturn repost V=`V'
+        if "`noisily'"=="" di as txt " done."
+    }
+    
+    // undo collapse
+    if "`collapse'"!="" {
+        local wgt
+        if "`generate'"=="" {
+            restore
+        }
+        else {
+            tempfile tmp
+            keep `sortindex' `M'
+            qui save `tmp', replace
+            restore
+            merge 1:1 `sortindex' using `tmp', nogenerate noreport
+            sort `allvars' `sortindex'
+            qui by `allvars': replace `M' = `M'[1]
+        }
+        ereturn repost, esample(`touse')
+        eret local wtype ""
+        eret local wexp ""
+    }
+    
+    // returns
+    eret local title    "M-index analysis"
+    eret local ropts    `"`ropts'"'
+    eret local rvars    `"`rvars'"'
+    eret local rcmd     `"`rcmd'"'
+    eret local eopts    `"`eopts'"'
+    eret local evars    `"`evars'"'
+    eret local ecmd     `"`ecmd'"'
+    eret local mopts    `"`mopts'"'
+    eret local mvars    `"`mvars'"'
+    eret local mcmd     `"`mcmd'"'
+    eret local collapse "`collapse'"
+    eret scalar k_out   = `nout'
+    eret local out_labels `"`out_labels'"'
+    eret local out      "`outcomes'"
+    eret local depvar   "`depvar'"
+    eret local cmd      "mindex"
+    if "`gmm'"!="" {
+        eret local vce     "gmm"
+        eret local vcetype "GMM"
+        eret matrix V0 = `V0'
+    }
+    
+    // generate
+    if "`generate'"!="" {
+        capt confirm new variable `generate2'
+        if _rc==1 exit 1 // user hit -break-
+        else if _rc drop `generate2'
+        rename `M' `generate2'
+        lab var `generate2' "Local M-index"
+        eret local generate "`generate2'"
+    }
+end
+
+program ParseEqs
+    local eqnames extended reduced mindex
+    forv i = 1/3 {
+        gettoken eq 0 : 0, match(par)
+        if "`par'"!="(" {
+            di as err `"'`eq'' found where '(' expected"'
+            exit 198
+        }
+        if strpos(`"`eq'"', ":") {  // get "eqname:" if existing
+            gettoken eqnm eq : eq, parse(":")
+            gettoken colon eq : eq, parse(":")
+            local found 0
+            foreach nm of local eqnames {
+                local l = strlen(`"`eqnm'"')
+                if `"`eqnm'"'==substr("`nm'", 1, `l') {
+                    local eqnm "`nm'"
+                    local found 1
+                    continue, break
+                }
+            }
+            if !`found' {
+                di as err `"'`eqnm':' not allowed"'
+                exit 198
+            }
+        }
+        else gettoken eqnm eqname : eqnames
+        local eqnames: list eqnames - eqnm
+        local eqnm = substr("`eqnm'", 1, 1)
+        ParseEq `eq'
+        c_local `eqnm'vars `varlist'
+        c_local `eqnm'cmd  `"`cmd'"'
+        c_local `eqnm'cons `cons'
+        c_local `eqnm'opts `options'
+        if `"`0'"'=="" continue, break
+    }
+    if `"`0'"'!="" {
+        di as err `"'`0'' found where nothing expected"'
+        exit 198
+    }
+end
+
+program ParseEq
+    syntax [varlist(numeric fv default=none)] [, cmd(str) noCONStant * ]
+    c_local varlist `varlist'
+    c_local cmd `"`cmd'"'
+    if "`constant'"=="" c_local cons _cons
+    else                c_local cons
+    c_local options `constant' `options'
+end
+
+program Parse_vce
+    syntax [, vce(str) CLuster(varname) robust ]
+    gettoken gmm rest : vce
+    if `"`gmm'"'=="gmm" {
+        c_local gmm "gmm"
+        local vce `rest'
+        if `"`vce'"'!="" {
+            local vce cluster `rest'
+            c_local vce `"vce(`vce')"'
+        }
+        else {
+            c_local vce ""
+        }
+    }
+    if `"`vce'"'!="" {
+        if "`cluster'"!="" {
+            di as err "only one of {bf:cluster()} and {bf:vce()} allowed"
+            exit 198
+        }
+        if "`robust'"!="" {
+            di as err "only one of {bf:robust} and {bf:vce()} allowed"
+            exit 198
+        }
+        _parse comma lhs rhs : vce
+        gettoken vcetype args : lhs
+        if `"`vcetype'"'==substr("cluster", 1, max(2, strlen(`"`vcetype'"'))) {
+            capt n confirm numeric variable `args'
+            if _rc {
+                di as err "error in option {bf:vce()}"
+                exit 198
+            }
+            if `: list sizeof args'>1 {
+                di as err "too many variables specified"
+                di as err "error in option {bf:vce()}"
+                exit 198
+            }
+            local cluster `args'
+        }
+        c_local vce vce(`vce')
+        c_local clustvar `cluster'
+        exit
+    }
+    if "`cluster'"!="" {
+        c_local vce vce(cluster `cluster')
+        c_local clustvar `cluster'
+        exit
+    }
+    if "`robust'"!="" {
+        c_local vce vce(robust)
+        c_local clustvar ""
+    }
+end
+
 program Display
     syntax [, noHeader * ]
     if "`header'"=="" {
@@ -1002,20 +1281,35 @@ program Display
         di ""
         local model `e(rcmd)' `e(depvar)' `e(rvars)'
         if `"`e(ropts)'"'!="" {
-            local model `e(rcmd)' `e(depvar)' `e(rvars)', `e(ropts)'
+            local model `model', `e(ropts)'
         }
-        di as txt "Reduced model: `model'"
-        local model `e(fcmd)' `e(depvar)' `e(fvars)'
-        if `"`e(fopts)'"'!="" {
-            local model `e(fcmd)' `e(depvar)' `e(fvars)', `e(fopts)'
+        Display_truncate_model `"`model'"'
+        di as txt `"Reduced model:  `model'"'
+        local model `e(ecmd)' `e(depvar)' `e(evars)'
+        if `"`e(eopts)'"'!="" {
+            local model `model', `e(eopts)'
         }
-        di as txt "Full model:    `model'"
+        Display_truncate_model `"`model'"'
+        di as txt `"Extended model: `model'"'
         if `"`e(over)'"'!="" {
-            di as txt "Over:          `e(over)'"
+            di as txt `"Over:           `e(over)'"'
+            if "`e(total)'"!="" {
+                di as txt `"Total:          `e(total)'"'
+            }
         }
     }
     di ""
     _coef_table, depname(M-index) `options'
+end
+
+program Display_truncate_model
+    args model
+    local linesize = max(78, c(linesize))
+    if strlen(`"`model'"')>(`linesize'-16) {
+        local model: piece 1 `=`linesize'-20' of `"`model'"'
+        local model `"`model' ..."'
+    }
+    c_local model `"`model'"'
 end
 
 version 11
@@ -1261,6 +1555,37 @@ void Fillin_b(string scalar bnm, real rowvector bvec, string scalar over,
     }
     st_matrix(bnm, b)
     st_matrixcolstripe(bnm, cstripe)
+}
+
+void relabelandremovebase(string scalar bname, string scalar prefix, 
+    real scalar ibase)
+{
+    real scalar    i, j, r
+    string matrix  eq0
+    string scalar  eq
+    string matrix  stripe
+    real matrix    b
+    real colvector p
+    
+    b = st_matrix(bname)
+    if ((r = cols(b))==0) return
+    stripe = st_matrixcolstripe(bname)
+    p = J(1, r, 1)
+    j = 0
+    eq0 = J(0,0,.)
+    for (i=1;i<=r;i++) {
+        if (stripe[i,1]!=eq0) {
+            j++
+            eq0 = stripe[i,1]
+            eq  = prefix + strofreal(j)
+        }
+        if (j==ibase) p[i] = 0
+        stripe[i,1] = eq
+    }
+    b = select(b, p)
+    stripe = select(stripe, p')
+    st_matrix(bname, b)
+    st_matrixcolstripe(bname, stripe)
 }
 
 end
