@@ -1,4 +1,4 @@
-*! version 1.0.3  22nov2019  Ben Jann & Simon Seiler
+*! version 1.0.4  13apr2020  Ben Jann & Simon Seiler
 
 program mindex, eclass
     version 11
@@ -54,23 +54,20 @@ end
 
 program Check_vceprefix
     _parse comma lhs 0 : 0
-    syntax [, vce(str) CLuster(passthru) Generate Generate2(passthru) NOSE * ]
-    local options `generate' `generate2' `options'
+    syntax [, vce(str) CLuster(passthru) Generate Generate2(passthru) * ]
+    local options `cluster' `generate' `generate2' `options'
     if `"`vce'"'!="" {
         Parse_vceprefix `vce'
         local options vce(`vce') `options'
-    }
-    if "`vceprefix'"!="" {
-        if "`generate'`generate2'"!="" {
-            di as err "{bf:generate()} not allowed with {bf:vce(`vceprefix')}"
-            exit 198
+        if "`vceprefix'"!="" {
+            if "`generate'`generate2'"!="" {
+                di as err "{bf:generate()} not allowed with {bf:vce(`vceprefix')}"
+                exit 198
+            }
+            local options _novce `options'
         }
-        local nose nose
     }
-    else {
-        local options `cluster' `options'
-    }
-    c_local 00 `lhs', `nose' `options'
+    c_local 00 `lhs', `options'
 end
 
 program Parse_vceprefix
@@ -84,26 +81,29 @@ end
 program Estimate, eclass
     gettoken depvar 0 : 0, parse(" ,(")
     _fv_check_depvar `depvar'
-    gettoken tmp : 0, match(par)
-    if "`par'"!="(" {
-        Estimate_basic `depvar' `0'
+    gettoken tmp rest : 0, match(par)
+    if `"`par'"'=="(" & inlist(strtrim(substr(`"`rest'"',1,1)),"","(") {
+        // the inlist() condition is required so that a specification such as
+        // "(x y)#z" is not mistaken as "(eq)"
+        Estimate_advanced `depvar' `0'
     }
     else {
-        Estimate_advanced `depvar' `0'
+        Estimate_basic `depvar' `0'
     }
     c_local diopts `diopts'
 end
 
 program Estimate_basic, eclass
     // syntax
-    gettoken depvar 0 : 0, parse(" ,(")
+    gettoken depvar 0 : 0, parse(" ,")
     syntax [varlist(numeric fv default=none)] /*
-        */ [if] [in] [fw iw pw aw] [, /*
+        */ [if] [in] [fw iw pw aw/] [, /*
         */ over(varname numeric) Total Total2(str) /*
         */ contrast DECompose DECompose2(str) REFgroup(str) /*
         */ CONTrols(varlist numeric fv) cmd(str) /*
         */ vce(passthru) CLuster(passthru) /*
-        */ COLLapse force NOSE /* 
+        */ _novce /* undocumented; used by vce(boot/jack)
+        */ NOCOLLapse COLLapse force /*
         */ Generate Generate2(name) Replace /*
         */ NOIsily noHeader * ]
     local evars `varlist'
@@ -154,14 +154,6 @@ program Estimate_basic, eclass
         ParseRefgroup, ref(`refgroup') total(`total') // returns iref or lref
     }
     else local iref .
-    if "`nose'"!="" {
-        foreach opt in vce cluster {
-            if `"``opt''"'!="" {
-                di as err "{bf:nose} and {bf:`opt'()} not both allowed"
-                exit 198
-            }
-        }
-    }
     fvrevar `evars', list   // get base names of variables
     local xvars `r(varlist)'
     fvrevar `rvars', list
@@ -180,48 +172,60 @@ program Estimate_basic, eclass
             di as err "vce(gmm) not allowed with basic syntax"
             exit 198
         }
+        if `"`vce'"'=="vce(none)" {
+            local vce
+            local _novce _novce
+        }
+        else {
+            local _novce
+        }
     }
     _get_diopts diopts, `options'
     c_local diopts `diopts' `header'
-    if "`weight'"!="" {
-        local wgt "[`weight'`exp']"
-    }
-    if "`collapse'"!="" & `"`wgt'"'!="" {
-        di as err "{bf:collapse} not allowed with weights"
-        exit 198
+    if "`collapse'"!="" {
+        if "`nocollapse'"!="" {
+            di as err "{bf:collapse} and {bf:nocollapse} not both allowed"
+            exit 198
+        }
+        if "`weight'"!="" {
+            di as err "{bf:collapse} not allowed with weights"
+            exit 198
+        }
     }
     
-    // determine whether computations can be done on tabular data (much
-    // faster than running mlogit)
+    // determine whether data should be compressed automatically and whether
+    // computations can be done on tabular data (much faster than running mlogit)
+    // - step 1: only a single categorical indepvar and no controls?
+    local evarsfv 1
+    fvrevar `evars', list
+    local evars0 `"`r(varlist)'"'
+    if `: list sizeof evars0'!=1        local evarsfv 0
+    else if `"`evars'"'!=`"i.`evars0'"' local evarsfv 0
+    // - step 2: set collapse
+    if `evarsfv' & "`nocollapse'"=="" & "`weight'"=="" local collapse collapse
+    // - step 3: determine whether tabulation is feasible
+    local rquick 0
+    local equick 0
     if "`force'"=="" & "`total'"!="within" {
         local rquick 1
         if `"`rcmd'"'!="mlogit" local rquick 0
         else if `"`rvars'"'!="" local rquick 0
         local equick `rquick' // equick requires rquick
         if `"`ecmd'"'!="mlogit" local equick 0
-        if `equick' {
-            fvrevar `evars', list
-            local tmp `"`r(varlist)'"'
-            if `: list sizeof tmp'!=1 local equick 0
-            if `equick' {
-                if `"`evars'"'!=`"i.`tmp'"' local equick 0
-                else {
-                    local evars0 `"`evars'"'
-                    local evars `"`tmp'"'
-                }
-            }
-        }
+        if `evarsfv'==0         local equick 0
     }
-    else {
-        local rquick 0
-        local equick 0
+    if `equick' {
+        local tmp `"`evars'"'
+        local evars `"`evars0'"'
+        local evars0 `"`tmp'"'
     }
+    else local evars0 `"`evars'"'
     
     // determine whether M variables need to be generated
     local Mgen    1 // main M
     local Mtotgen 1 // M of total
     local Mcfgen  1 // counterfactual Ms
-    if "`nose'"!="" {
+    if "`_novce'"!="" {
         if `equick' {
             if !inlist("`total'","average","balanced") {
                 if "`generate'"=="" local Mgen 0
@@ -235,6 +239,16 @@ program Estimate_basic, eclass
     marksample touse
     local allvars `touse' `depvar' `xvars' `over' `clustvar'
     markout `allvars'
+    if "`weight'"!="" {
+        capt confirm variable `exp'
+        if _rc {
+            tempvar wvar
+            qui gen double `wvar' = `exp'
+        }
+        else local wvar `exp'
+        local exp `"= `exp'"'
+        local wgt "[`weight'=`wvar']"
+    }
     _nobs `touse' `wgt'
     local N = r(N)
     
@@ -262,7 +276,7 @@ program Estimate_basic, eclass
             exit 498
         }
         qui levelsof ``v'' if `touse', local(`v'_levels)
-        local `v'_k: list sizeof `v'_levels
+        local `v'_k: list sizeof `v'_levels // older Stata versions do not return r(r)
     }
     local out_labels
     if "`: val lab `depvar''"!="" {
@@ -393,8 +407,7 @@ program Estimate_basic, eclass
         }
         else {
             tempname p pref
-            GetProb `depvar' if `touse'`ifref' `wgt', p(`pref') ///
-                outcomes(`depvar_levels')
+            GetProb `depvar' if `touse'`ifref' `wgt', p(`pref') outcomes(`depvar_levels')
             local QOPT
             local QOPTREF
             local XLEVELS
@@ -437,8 +450,7 @@ program Estimate_basic, eclass
                 local QOPT q(`q')
             }
             else {
-                GetProb `depvar' if `touse'`andover' `wgt', p(`p') ///
-                    outcomes(`depvar_levels')
+                GetProb `depvar' if `touse'`andover' `wgt', p(`p') outcomes(`depvar_levels')
             }
             local j 0
             foreach mcf of local MCF {
@@ -457,7 +469,7 @@ program Estimate_basic, eclass
                 local popt: word `j' of `POPT'
                 local mopt: word `j' of `MOPT'
                 CounterfactualM `equick' if `touse'`andover' `wgt', ///
-                    mvar(`Mvar') depvar(`depvar') outcomes(`depvar_levels') ///
+                    mvar(`Mvar') depvar(`depvar') /*outcomes(`depvar_levels')*/ ///
                     `XLEVELS' p(``popt'') m(``mopt'') `QOPT' ///
                     bvec(`bvec') bpos(`bpos')
                 // reference group
@@ -471,7 +483,7 @@ program Estimate_basic, eclass
                 local popt: word `j' of `POPTr'
                 local mopt: word `j' of `MOPTr'
                 CounterfactualM `equick' if `touse'`ifref' `wgt', ///
-                    mvar(`Mvar') depvar(`depvar') outcomes(`depvar_levels') ///
+                    mvar(`Mvar') depvar(`depvar') /*outcomes(`depvar_levels')*/ ///
                     `XLEVELS' p(``popt'') m(``mopt'') `QOPTREF' ///
                     bvec(`bvec') bpos(`bpos')
             }
@@ -484,14 +496,14 @@ program Estimate_basic, eclass
     tempname b
     if "`over'"=="" {
         mat rename `bvec' `b'
-        mat coln `b' = _cons
+        mat coln `b' = "_cons"
     }
     else {
         mata: Fillin_b("`b'", st_matrix("`bvec'"), "`over'", ///
             tokens(st_local("over_levels")), "`total'"!="", `iref', ///
             "`decompose'"!="", "`split'"!="")
     }
-    if "`nose'"=="" {
+    if "`_novce'"=="" {
         tempname V
         Compute_V `wgt', touse(`touse') `vce' b(`bvec') over(`over') ///
             levels(`over_levels') total(`total') iref(`iref') `decompose'  ///
@@ -533,7 +545,7 @@ program Estimate_basic, eclass
     }
     
     // returns
-    eret post `b' `V' `wgt', depname(`depvar') obs(`N') esample(`touse')
+    eret post `b' `V' [`weight'`exp'], depname(`depvar') obs(`N') esample(`touse')
     eret local title "M-index analysis"
     eret local vcetype `"`e_vcetype'"'
     eret local vce `"`e_vce'"'
@@ -545,10 +557,7 @@ program Estimate_basic, eclass
     eret local rvars `"`rvars'"'
     eret local rcmd `"`rcmd'"'
     eret local etable = cond(`equick', "etable", "")
-    if `equick' {
-        local evars `"`evars0'"'
-    }
-    eret local evars `"`evars'"'
+    eret local evars `"`evars0'"'
     eret local ecmd `"`ecmd'"'
     eret local force `"`force'"'
     eret local collapse "`collapse'"
@@ -739,7 +748,7 @@ program CounterfactualM
 end
 
 program CounterfactualM_rake
-    syntax if [fw iw pw aw], depvar(str) outcomes(str) ///
+    syntax if [fw iw pw aw], depvar(str) /*outcomes(str)*/ ///
         xvar(str) xlevels(str) p(str) m(str) q(str) ///
         [ mvar(str) bvec(str) bpos(str) ]
     tempvar pr
@@ -757,7 +766,7 @@ program CounterfactualM_rake
 end
 
 program CounterfactualM_mlogit
-    syntax if [fw iw pw aw], mvar(str) depvar(str) outcomes(str) p(str) m(str) ///
+    syntax if [fw iw pw aw], mvar(str) depvar(str) /*outcomes(str)*/ p(str) m(str) ///
         [ bvec(str) bpos(str) ]
     if "`weight'"=="pweight" local wgt "[aweight`exp']"
     else if "`weight'"!=""   local wgt "[`weight'`exp']"
@@ -809,19 +818,58 @@ program CounterfactualM_mlogit
 end
 
 program GetProb
-    syntax varlist if [fw iw pw aw], p(str) outcomes(str) [ xlevels(str) NOIsily ]
+    syntax varlist if [fw iw pw aw], p(str) outcomes(str) ///
+        [ xlevels(str) NOIsily ]
     if "`weight'"=="pweight" local weight aweight
     tempname Q R C
     if `: list sizeof varlist'>1 {
-        qui `noisily' tab `varlist' `if' [`weight'`exp'], ///
+        capture `noisily' tab `varlist' `if' [`weight'`exp'], ///
             matcell(`Q') matcol(`C') matrow(`R')
+        if _rc==134 {
+            BigTab `varlist' `if' [`weight'`exp'], matcell(`Q') matcol(`C') matrow(`R')
+        }
+        else if _rc {
+            exit _rc
+        }
         mata: CopyProb(1) // because some categories may be empty
     }
     else {
-        qui `noisily' tab `varlist' `if' [`weight'`exp'], ///
+        capture `noisily' tab `varlist' `if' [`weight'`exp'], ///
             matcell(`Q') matrow(`R')
+        if _rc==134 {
+            BigTab `varlist' `if' [`weight'`exp'], matcell(`Q') matrow(`R')
+        }
+        else if _rc {
+            exit _rc
+        }
         mata: CopyProb(0) // because some categories may be empty
     }
+end
+
+program BigTab, rclass
+    syntax varlist if [fw iw aw pw/], matcell(str) matrow(str) [ matcol(str) ]
+    preserve
+    qui keep `if'
+    tempname w
+    if `"`exp'"'=="" {
+        return scalar N = _N
+        sort `varlist'
+        by `varlist': gen double `w' = _N
+        qui by `varlist': keep if _n==_N
+    }
+    else {
+        su `exp', meanonly
+        return scalar N = r(sum)
+        sort `varlist' `exp'
+        by `varlist': gen double `w' = sum(`exp')
+        qui by `varlist': keep if _n==_N
+    }
+    if `:list sizeof varlist'==1 {
+        mkmat `varlist', matrix(`matrow')
+        mkmat `w', matrix(`matcell')
+        exit
+    }
+    mata: BigTab_mkmat(tokens("`varlist' `w'"), "`matcell'", "`matrow'", "`matcol'")
 end
 
 program ProbToCoefs
@@ -936,10 +984,11 @@ end
 
 program Estimate_advanced, eclass
     // syntax
-    gettoken depvar 0 : 0
+    gettoken depvar 0 : 0, parse(" ,")
     syntax anything(id="varlist") /*
         */ [if] [in] [fw iw pw aw] [, /*
         */ vce(passthru) CLuster(passthru) ROBUST /*
+        */ _novce /* undocumented; used by vce(boot/jack); does nothing
         */ COLLapse /*
         */ Generate Generate2(name) Replace /*
         */ NOIsily noHeader * ]
@@ -981,9 +1030,11 @@ program Estimate_advanced, eclass
     if "`weight'"!="" {
         local wgt "[`weight'`exp']"
     }
-    if "`collapse'"!="" & `"`wgt'"'!="" {
-        di as err "{bf:collapse} not allowed with weights" 
-        exit 198
+    if "`collapse'"!="" {
+        if "`weight'"!="" {
+            di as err "{bf:collapse} not allowed with weights"
+            exit 198
+        }
     }
     
     // mark sample, count obs
@@ -1015,7 +1066,7 @@ program Estimate_advanced, eclass
         exit 498
     }
     qui levelsof `depvar' if `touse', local(outcomes)
-    local nout: list sizeof outcomes
+    local nout: list sizeof outcomes // older Stata versions do not return r(r)
     local out_labels
     if "`: val lab `depvar''"!="" {
         forval i = 1/`nout' {
@@ -1329,6 +1380,55 @@ void restore_and_promote_esample()
     stata("ereturn repost, esample("+touse+")")
 }
 
+void BigTab_mkmat(string rowvector yxw, string scalar Qnm, string scalar Rnm, string scalar Cnm)
+{
+    real scalar    n, i, r, c, a, b, offset
+    real colvector y, x, w, py, xx, minmax, map
+    real matrix    Q
+    
+    // input data
+    y = st_data(., yxw[1])
+    x = st_data(., yxw[2])
+    w = st_data(., yxw[3])
+    n = rows(y)
+    
+    // get unique values of y
+    py = select(1::n, (y :!= (y[|2\n|] \ .))) // index of last obs per group
+    st_matrix(Rnm, y[py])
+    
+    // get unique values of x
+    xx = sort(x,1)
+    xx = select(xx, (xx :!= (xx[|2\n|] \ .)))
+    st_matrix(Cnm, xx')
+    
+    // fill-in crosstab
+    r = rows(py); c = rows(xx)
+    Q = J(r, c, 0)
+    minmax = minmax(xx)
+    // - case 1: x takes on consecutive values from 1 to c
+    if (minmax==(1,c)) {
+        b = 0
+        for (i=1; i<=r; i++) {
+            a = b + 1
+            b = py[i]
+            Q[i,x[|a \ b|]] = w[|a \ b|]'
+        }
+        st_matrix(Qnm, Q)
+        return
+    }
+    // - case 2: x is irregular; need a mapping index
+    offset = 1 - minmax[1]
+    map = J(minmax[2]+offset, 1, .)
+    map[xx:+offset] = (1::c)
+    b = 0
+    for (i=1; i<=r; i++) {
+        a = b + 1
+        b = py[i]
+        Q[i, map[x[|a \ b|]:+offset]] = w[|a \ b|]'
+    }
+    st_matrix(Qnm, Q)
+}
+
 void CopyProb(real scalar twoway)
 {
     real scalar      i, ii, n, nn
@@ -1398,17 +1498,17 @@ void Fillin_M(string scalar Mnm, string scalar Ynm, string scalar Xnm,
     string scalar touse, real vector Yvals, real vector Xvals, real matrix P)
 {
     real scalar     i, offset
-    real rowvector  minmax, map, lnP0
-    real colvector  M, Y, X
+    real rowvector  minmax, lnP0
+    real colvector  M, Y, X, map
     real matrix     lnP
-
+    
     // create Y mapping
     minmax = minmax(Yvals); i = length(Yvals)
     Y = st_data(., Ynm, touse)
     if (minmax!=(1,i)) {
         offset = 1 - minmax[1]
-        map = J(1, minmax[2]+offset, .)
-        map[Yvals:+offset] = (1..i)
+        map = J(minmax[2]+offset, 1, .)
+        map[Yvals:+offset] = (1::i)
         Y = map[Y:+offset]
     }
     // create X mapping
@@ -1416,14 +1516,14 @@ void Fillin_M(string scalar Mnm, string scalar Ynm, string scalar Xnm,
     X = st_data(., Xnm, touse)
     if (minmax!=(1,i)) {
         offset = 1 - minmax[1]
-        map = J(1, minmax[2]+offset, .)
-        map[Xvals:+offset] = (1..i)
+        map = J(minmax[2]+offset, 1, .)
+        map[Xvals:+offset] = (1::i)
         X = map[X:+offset]
     }
     // compute M
     lnP0 = editmissing(ln(colsum(P)), 0)
     lnP = editmissing(ln(P :/ rowsum(P)), 0)
-    i = rows(Y)
+    i = length(Y)
     M = J(i, 1, 0)
     for (; i; i--) M[i] = lnP[X[i], Y[i]] - lnP0[Y[i]]
     st_store(., Mnm, touse, M)

@@ -1,2 +1,2 @@
 v 3
-p mindex
+p mindex module to compute and analyze the mutual information index (M-index)

@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.0  06sep2019  Ben Jann & Simon Seiler}{...}
+{* *! version 1.0.1  14apr2020  Ben Jann & Simon Seiler}{...}
 {vieweralsosee "[R] mlogit" "help mlogit"}{...}
 {hi:help mindex}
 {hline}
@@ -41,17 +41,13 @@
     {p_end}
 {synopt :{opt dec:ompose}[{cmd:(}{opt s:plit}{cmd:)}]}decompose differences between subpopulations
     {p_end}
-{synopt :{opt split}}subdivide margins decomposition component
-    {p_end}
 {synopt :{opt ref:erence(refgroup)}}select reference group for contrasts and decompositions
     {p_end}
 {synopt :{opth cont:rols(varlist)}}control variables to be included outcome models
     {p_end}
 
 {syntab :SE/Robust}
-{synopt :{opt nose}}do not compute standard errors
-    {p_end}
-{synopt :{opth vce(vcetype)}}{it:vcetype} may be
+{synopt :{opt vce}{cmd:(}{it:{help mindex##vcebasic:vcetype}}{cmd:)}}{it:vcetype} may be {opt none},
    {opt analytic}, {opt cl:uster} {it:clustvar}, {opt boot:strap}, or
    {opt jack:knife}
    {p_end}
@@ -77,7 +73,7 @@
 {syntab :Technical}
 {synopt :{opt cmd(command)}}command to be used for the outcome models; default is {helpb mlogit}
     {p_end}
-{synopt :{opt coll:apse}}internally collapse data to improve speed
+{synopt :[{ul:{cmd:no}}]{opt coll:apse}}internally collapse data to improve speed
     {p_end}
 {synopt :{opt force}}enforce outcome model estimation even if tabulation is feasible
     {p_end}
@@ -125,7 +121,7 @@
 {col 5}{help mindex##advoptions:{it:options}}{col 29}Description
 {synoptline}
 {syntab :SE/Robust}
-{synopt :{opth vce(vcetype)}}{it:vcetype} may be {opt gmm} [{it:clustvar}],
+{synopt :{opt vce}{cmd:(}{it:{help mindex##vceadv:vcetype}}{cmd:)}}{it:vcetype} may be {opt gmm} [{it:clustvar}],
     {opt boot:strap}, {opt jack:knife}, or any {it:vcetype} allowed by the
     command used to analyze the M-index, e.g. {opt r:obust} or
     {opt cl:uster} {it:clustvar}
@@ -221,7 +217,7 @@
     a part due to differences in the distribution of the predictors, type
     {cmd:decompose(split)}. {cmd:decompose} requires {cmd:over()} and implies 
     {cmd:contrast}. Options {cmd:total(average)},
-    {cmd:total(balance)}, {cmd:controls()}, and {cmd:cmd()} are not supported 
+    {cmd:total(balanced)}, {cmd:controls()}, and {cmd:cmd()} are not supported 
     together with {cmd:decompose}. By default, no standard errors are reported for the 
     decomposition components; use the bootstrap to obtain standard errors.
 
@@ -237,13 +233,10 @@
     the reduced model and the extended model. {it:varlist} may contain factor
     variables; see {help fvvarlist}.
 
-{phang}
-    {opt nose} skips the computation if standard errors. Use this option to save
-    computer time. {cmd:vce(bootstrap)} and {cmd:vce(jackknife)} imply {cmd:nose}.
-
+{marker vcebasic}{...}
 {phang}
     {opt vce(vcetype)} specifies the type of variance estimation to be used
-    to determine the standard errors. {it:vcetype} may be
+    to determine the standard errors. {it:vcetype} may be {opt none} (omit variance estimation),
     {opt analytic} (the default), {opt cl:uster} {it:clustvar}, {opt boot:strap}, or
     {opt jack:knife}; see {help vce_option:[R] {it:vce_option}}. No standard errors
     are reported for decomposition results if {it:vcetype} is {cmd:analytic} 
@@ -289,12 +282,19 @@
     categorical with only few levels). {opt collapse} is not allowed if
     weights are specified.
 
+{pmore}
+    {opt collapse} is applied automatically if {cmd:controls()} is empty,
+    {it:indepvars} only contains a single categorical variable specified
+    as {cmd:i.}{it:varname} (factor variable), and no weights are 
+    specified. Specify {cmd:nocollapse} to deactivate this behavior.
+
 {phang}
     {opt force} enforces model estimation even if tabulation is feasible. If
     {cmd:controls()} is empty, base probabilities can be obtained from a
     one-way table of {it:depvar} without estimating the reduced model.
     Likewise, if {cmd:controls()} is empty and {it:indepvars} contains a single
-    categorical variable, conditional probabilities can be obtained from a
+    categorical variable (specified
+    as {cmd:i.}{it:varname}), conditional probabilities can be obtained from a
     two-way table. To save computer time, {cmd:mindex} automatically detects
     these situations and switches to tabulation whenever feasible. Apply option
     {cmd:force} to deactivate this behavior. In any case, tabulation will only
@@ -309,6 +309,7 @@
 {marker advoptions}{...}
 {title:Advanced syntax options}
 
+{marker vceadv}{...}
 {phang}
     {opt vce(vcetype)} specifies the type of variance estimation to be used
     to determine the standard errors. {it:vcetype} may be:
@@ -430,16 +431,16 @@
 {dlgtab:GMM standard errors}
 
 {pstd}
-    Default standard errors can be quite of when decomposing the M-index by 
-    subpopulations. Example:
+    Default standard errors can be quite off when decomposing the M-index by 
+    categories. Example:
 
         . {stata "use http://www.stata.com/stb/stb55/sg142/example1.dta, clear"}
-        . {stata mindex son (i.father) () (i.son) [fweight=obs]}
+        . {stata mindex son (i.father) () (ibn.son, nocons) [fweight=obs]}
 
 {pstd}
     Better standard errors can be obtains in this case by {cmd:vce(gmm)}:
 
-        . {stata mindex son (i.father) () (i.son) [fweight=obs], vce(gmm)}
+        . {stata mindex son (i.father) () (ibn.son, nocons) [fweight=obs], vce(gmm)}
 
 
 {marker methods}{...}

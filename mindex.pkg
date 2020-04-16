@@ -1,8 +1,9 @@
 v 3
-d mindex
+d mindex: module to compute and analyze the mutual information index (M-index)
+d 
 d Author: Ben Jann, University of Bern, ben.jann@soz.unibe.ch
 d
-d Distribution-Date: 26nov2019
+d Distribution-Date: 20200416
 f mindex.sthlp
 f mindex.ado
 f mindex_gmm.ado
